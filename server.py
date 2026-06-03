@@ -39,7 +39,7 @@ class AskRequest(BaseModel):
     question:     str
     image_base64: str | None        = None  # base64 JPEG/PNG from camera; omit to skip recognition
     state:        AskStateInput | None = None  # omit to skip context routing
-    mode:         str | None        = None  # direct mode override: GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
+    mode:         str | None        = None  # GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
 
 
 class AskResponse(BaseModel):
@@ -121,5 +121,7 @@ def health():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    import os
     import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)
