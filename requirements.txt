@@ -1,0 +1,29 @@
+# ContextAR — Python 3.10 (conda env: contextar)
+# Install with: pip install -r requirements.txt
+
+# Web server
+fastapi==0.135.3
+uvicorn==0.44.0
+pydantic==2.13.0
+
+# AI / LLM
+openai==2.31.0
+langchain==1.2.15
+langchain-openai==1.1.12
+langchain-community==0.4.1
+langchain-classic==1.0.3
+langchain-core==1.2.28
+
+# Vector store
+faiss-cpu==1.13.2
+
+# Computer vision
+opencv-python==4.13.0.92
+
+# Utilities
+numpy==2.2.6
+requests==2.33.1
+python-dotenv==1.2.2
+
+# Testing
+pytest==9.0.2
