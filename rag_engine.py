@@ -11,7 +11,7 @@ Usage:
     python rag_engine.py --build
 
     # Query
-    python rag_engine.py --query "Who painted this blue swirly night scene?"
+    python rag_engine.py --query "Who created this sculpture and when?"
 """
 
 import os
@@ -40,10 +40,10 @@ CHAT_MODEL  = "gpt-4o"
 # visitor's level of engagement and the environment they are standing in.
 
 _BASE_CONTEXT = (
-    "You are an audio guide for the exhibition "
-    "'Western European Paintings, 15th–20th Century' at the Metropolitan Museum of Art. "
+    "You are an audio guide for the Louvre Museum and Jardin des Tuileries, Paris. "
+    "The exhibition features iconic sculptures from antiquity to the 20th century. "
     "Use only the exhibit information below. "
-    "Speak directly to the visitor as if they are standing in front of the painting.\n\n"
+    "Speak directly to the visitor as if they are standing in front of the sculpture.\n\n"
     "Exhibit information:\n{context}\n\n"
     "Visitor question: {question}\n\n"
 )
@@ -81,7 +81,7 @@ PROMPT_FULL_VOICE = PromptTemplate(
         "Answer in 4–6 sentences (around 120–150 words). "
         "Include: the direct answer to the question, relevant historical context, "
         "an interesting story or surprising detail, and a closing thought that invites "
-        "the visitor to look more closely at the painting. Be warm and immersive.\n\n"
+        "the visitor to look more closely at the sculpture. Be warm and immersive.\n\n"
         "Answer:"
     ),
 )
