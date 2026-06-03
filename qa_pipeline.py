@@ -19,7 +19,7 @@ import cv2
 
 from exhibit_recognizer import recognize_exhibit
 from rag_engine import RAGEngine
-from context_router import route
+from context_router import route, BRIEF_MAX, FULL_MAX
 
 
 def _b64_to_frame(image_b64: str) -> np.ndarray | None:
@@ -27,32 +27,42 @@ def _b64_to_frame(image_b64: str) -> np.ndarray | None:
     try:
         img_bytes = base64.b64decode(image_b64)
         arr = np.frombuffer(img_bytes, dtype=np.uint8)
-        return cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    except Exception:
+        return cv2.imdecode(arr, cv2.IMREAD_COLOR)  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001 — any decode failure should silently return None
         return None
+
+
+DEFAULT_MODE = "FULL_VOICE"
 
 
 def run(
     question:  str,
     image_b64: str | None,
-    api_state: dict,
     rag:       RAGEngine,
+    api_state: dict | None = None,
+    mode:      str | None  = None,
 ) -> dict:
     """
     Full QA pipeline. No hardware access — everything is passed in.
 
+    Mode selection priority:
+      1. mode is set   → use it directly (skip context router)
+      2. api_state set → context router decides the mode
+      3. neither       → default to FULL_VOICE
+
     Args:
         question:  Visitor's natural-language question.
-        image_b64: Base64-encoded JPEG/PNG of the current camera frame.
-                   Pass None or "" to skip exhibit recognition.
-        api_state: Flat state dict from Unity: {"crowd": str, "noise": str, "gaze_duration": float}
+        image_b64: Base64-encoded JPEG/PNG from camera. None to skip recognition.
         rag:       Pre-loaded RAGEngine singleton (injected by server.py).
+        api_state: Unity sensor state: {"crowd": str, "noise": str, "gaze_duration": float}
+        mode:      Direct mode override.
+                   One of: GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
 
     Returns:
         {
-            "mode":    str,  # NO_RESPONSE | BRIEF_TEXT | GLANCE_CARD | FULL_VOICE | BRIEF_TEXT_PROMPT
-            "answer":  str,  # empty string for NO_RESPONSE
-            "exhibit": str,  # recognised exhibit name or ""
+            "mode":    str,
+            "answer":  str,
+            "exhibit": str,
         }
     """
     # Step 1: Identify exhibit from camera frame (optional)
@@ -73,12 +83,31 @@ def run(
         f"[Regarding: {exhibit_name}] {question}" if exhibit_name else question
     )
 
-    # Step 3: Route → mode + answer
-    decision = route(question=enriched_question, rag=rag, state=api_state)
+    # Step 3: Decide mode and generate answer
+    if mode:
+        # Direct override — skip context router entirely
+        max_len = FULL_MAX if mode == "FULL_VOICE" else BRIEF_MAX
+        rag_result = rag.query(enriched_question, mode=mode, max_length=max_len)
+        return {
+            "mode":    mode,
+            "answer":  rag_result["answer"],
+            "exhibit": exhibit_name,
+        }
 
+    if api_state:
+        # Full Unity flow — context router decides
+        decision = route(question=enriched_question, rag=rag, state=api_state)
+        return {
+            "mode":    decision.mode,
+            "answer":  decision.answer,
+            "exhibit": exhibit_name,
+        }
+
+    # Fallback — no state, no mode: give a full answer
+    rag_result = rag.query(enriched_question, mode=DEFAULT_MODE)
     return {
-        "mode":    decision.mode,
-        "answer":  decision.answer,
+        "mode":    DEFAULT_MODE,
+        "answer":  rag_result["answer"],
         "exhibit": exhibit_name,
     }
 
@@ -89,7 +118,7 @@ def run(
 
 if __name__ == "__main__":
     print("Loading RAG engine...")
-    rag = RAGEngine()
+    _rag = RAGEngine()
 
     test_cases = [
         {
@@ -116,10 +145,10 @@ if __name__ == "__main__":
 
     for tc in test_cases:
         result = run(
-            question="Tell me about this painting",
+            question="Tell me about this sculpture",
             image_b64=None,
             api_state=tc["state"],
-            rag=rag,
+            rag=_rag,
         )
         print(f"\n{tc['label']}")
         print(f"  Mode   : {result['mode']}")

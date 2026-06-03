@@ -26,6 +26,9 @@ _rag: RAGEngine | None = None
 # Request / response schema
 # ---------------------------------------------------------------------------
 
+VALID_MODES = {"GLANCE_CARD", "BRIEF_TEXT", "FULL_VOICE", "BRIEF_TEXT_PROMPT"}
+
+
 class AskStateInput(BaseModel):
     crowd:         str   = "low"   # "low" | "crowded"
     noise:         str   = "quiet" # "quiet" | "noisy"
@@ -34,8 +37,9 @@ class AskStateInput(BaseModel):
 
 class AskRequest(BaseModel):
     question:     str
-    image_base64: str | None = None   # base64 JPEG/PNG from camera; omit to skip recognition
-    state:        AskStateInput = AskStateInput()
+    image_base64: str | None        = None  # base64 JPEG/PNG from camera; omit to skip recognition
+    state:        AskStateInput | None = None  # omit to skip context routing
+    mode:         str | None        = None  # direct mode override: GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
 
 
 class AskResponse(BaseModel):
@@ -72,19 +76,31 @@ app.add_middleware(
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
     """
-    Full QA pipeline endpoint for Unity.
+    QA endpoint. Three usage patterns:
 
-    Unity sends the visitor's question, an optional camera frame (base64),
-    and the current sensor state. Returns the response mode, text answer,
-    and the identified exhibit name.
+    1. Simplest — no state, no mode (default FULL_VOICE):
+       { "question": "Who made this?" }
+
+    2. Direct mode — skip context routing:
+       { "question": "Who made this?", "mode": "GLANCE_CARD" }
+
+    3. Full Unity flow — context router decides mode:
+       { "question": "...", "state": { "crowd": "low", "noise": "quiet", "gaze_duration": 20.0 } }
     """
     if _rag is None:
         raise HTTPException(status_code=503, detail="RAG engine not ready yet")
 
+    if req.mode and req.mode not in VALID_MODES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid mode '{req.mode}'. Choose from: {sorted(VALID_MODES)}",
+        )
+
     result = qa_pipeline.run(
         question=req.question,
         image_b64=req.image_base64,
-        api_state=req.state.model_dump(),
+        api_state=req.state.model_dump() if req.state else None,
+        mode=req.mode,
         rag=_rag,
     )
 
