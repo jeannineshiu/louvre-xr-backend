@@ -3,9 +3,33 @@
 FastAPI backend for an XR museum companion system.
 Exhibition: **Louvre Museum & Jardin des Tuileries, Paris** — eight iconic sculptures from antiquity to the 20th century.
 
-The backend receives a visitor's question and optional context (gaze duration, crowd density, ambient noise) from an XR device, optionally identifies the sculpture from a camera frame, and returns a mode decision with a length-appropriate text answer.
-
 > **Access:** This server is deployed on Railway. Contact a team member for the public URL — it is not published here to limit access to the team.
+
+---
+
+## What This Server Does
+
+This is a **pure QA + routing service**. It has no sensors, no camera, and no background threads. All it does is:
+
+1. **Receive** a visitor's question + optional context (sensor state, camera image) from the frontend
+2. **Identify** the sculpture in the image (if provided), using GPT-4o Vision
+3. **Decide** the appropriate response mode based on the visitor's context (gaze duration, crowd level)
+4. **Answer** the question using a RAG pipeline (FAISS vector search + GPT-4o), with a prompt tuned to the selected mode
+
+Everything that involves sensing the physical environment — gaze tracking, crowd detection, noise classification — happens on the XR device and is passed to this server as values in the request body.
+
+```
+XR Device (Unity / Quest / Phone / Browser)
+  ├── measures gaze_duration, crowd, noise
+  ├── captures camera frame (optional)
+  └── sends POST /ask
+            ↓
+AI Server (this repo)
+  ├── Step 1: GPT-4o Vision → identify sculpture (if image provided)
+  ├── Step 2: Context Router → decide mode from sensor state
+  ├── Step 3: RAG Engine → FAISS retrieval + GPT-4o answer
+  └── returns { mode, answer, exhibit }
+```
 
 ---
 
@@ -34,7 +58,7 @@ louvre-ar-backend/
 
 ## The Eight Sculptures
 
-| Sculpture | Artist | Date | Location in Louvre |
+| Sculpture | Artist | Date | Location |
 |---|---|---|---|
 | Winged Victory of Samothrace | Unknown (Rhodian school) | c. 190 BC | Salle 703, Daru Staircase |
 | Venus de Milo | Attr. Alexandros of Antioch | c. 130–100 BC | Salle 346 |
@@ -51,7 +75,7 @@ Each sculpture has five structured knowledge sections: `key_facts`, `visual_desc
 
 ## Quick Start — Local Development
 
-### 1. Clone and create environment
+### 1. Clone and set up environment
 
 ```bash
 git clone <repo-url>
@@ -77,8 +101,189 @@ The FAISS index is already committed — no rebuild needed.
 uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Server available at `http://localhost:8000`.
-Interactive docs at `http://localhost:8000/docs`.
+Server: `http://localhost:8000`
+Interactive docs: `http://localhost:8000/docs`
+
+---
+
+## Testing Guide
+
+The `/ask` endpoint supports three independent usage patterns. You can start from the simplest and add complexity as your integration matures. **None of them require a headset.**
+
+---
+
+### Level 1 — Pure QA (AI answer only)
+
+Use this to verify the AI knowledge base and answer quality. No sensor data, no image, no mode selection. The server defaults to `FULL_VOICE` (full immersive answer).
+
+```bash
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Tell me about the Venus de Milo"}'
+```
+
+```bash
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Why did the Dying Slave cause controversy?"}'
+```
+
+**Expected response:**
+```json
+{
+  "mode": "FULL_VOICE",
+  "answer": "The Dying Slave is a marble sculpture by Michelangelo...",
+  "exhibit": ""
+}
+```
+
+---
+
+### Level 2 — Test specific response modes
+
+Use this to test how the frontend should render different response lengths. Pass `mode` directly to bypass the context router entirely.
+
+```bash
+# One-sentence card (~20 words) — for crowded, quick-glance scenarios
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Tell me about the Winged Victory", "mode": "GLANCE_CARD"}'
+
+# Short answer (~50 words) — for interested but brief engagement
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Tell me about the Winged Victory", "mode": "BRIEF_TEXT"}'
+
+# Full immersive answer (~150 words) — for deeply engaged visitors
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Tell me about the Winged Victory", "mode": "FULL_VOICE"}'
+
+# Brief answer + quiet-spot nudge — for engaged visitors in a crowd
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Tell me about the Winged Victory", "mode": "BRIEF_TEXT_PROMPT"}'
+```
+
+**All four valid modes:**
+
+| Mode | Target length | When to use |
+|---|---|---|
+| `GLANCE_CARD` | ~20 words | Crowded room, visitor glancing briefly |
+| `BRIEF_TEXT` | ~50 words | Low crowd, brief interest |
+| `FULL_VOICE` | ~150 words | Low crowd, deeply engaged |
+| `BRIEF_TEXT_PROMPT` | ~60 words | Engaged visitor but crowded — includes a nudge toward a quieter spot |
+
+---
+
+### Level 3 — Full context router
+
+Use this to test the complete XR flow. Send sensor values the way your device would, and let the server decide the mode automatically.
+
+```bash
+# Visitor passing by — expect NO_RESPONSE, empty answer
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Tell me about this sculpture","state":{"crowd":"low","noise":"quiet","gaze_duration":2.0}}'
+
+# Briefly interested, low crowd — expect BRIEF_TEXT
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Tell me about this sculpture","state":{"crowd":"low","noise":"quiet","gaze_duration":8.0}}'
+
+# Glancing, crowded room — expect GLANCE_CARD
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Tell me about this sculpture","state":{"crowd":"crowded","noise":"noisy","gaze_duration":10.0}}'
+
+# Deeply engaged, low crowd — expect FULL_VOICE
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Tell me about this sculpture","state":{"crowd":"low","noise":"quiet","gaze_duration":20.0}}'
+
+# Deeply engaged, crowded — expect BRIEF_TEXT_PROMPT
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Tell me about this sculpture","state":{"crowd":"crowded","noise":"noisy","gaze_duration":20.0}}'
+```
+
+**Routing logic:**
+
+```
+gaze_duration < 5s                    →  NO_RESPONSE       (do not interrupt)
+5s ≤ gaze_duration < 15s, crowded    →  GLANCE_CARD
+5s ≤ gaze_duration < 15s, low crowd  →  BRIEF_TEXT
+gaze_duration ≥ 15s, crowded         →  BRIEF_TEXT_PROMPT
+gaze_duration ≥ 15s, low crowd       →  FULL_VOICE
+```
+
+Note: `noise` does not affect the mode — audio is delivered through earphones, so environment noise is irrelevant to routing.
+
+---
+
+### Level 4 — With sculpture recognition
+
+Add `image_base64` to any of the above patterns. The server calls GPT-4o Vision to identify which sculpture is in the image, then tailors the answer accordingly.
+
+```json
+{
+  "question": "Tell me about this sculpture",
+  "image_base64": "<base64-encoded JPEG or PNG>",
+  "state": { "crowd": "low", "noise": "quiet", "gaze_duration": 20.0 }
+}
+```
+
+When recognition succeeds, `exhibit` in the response will contain the sculpture name, and the answer will be specific to that work.
+
+**To convert an image to base64 for testing:**
+```bash
+# macOS / Linux
+base64 -i my_photo.jpg | tr -d '\n'
+```
+
+```python
+# Python
+import base64
+with open("my_photo.jpg", "rb") as f:
+    print(base64.b64encode(f.read()).decode())
+```
+
+---
+
+### Using Swagger UI instead of curl
+
+Open `<BASE_URL>/docs` in any browser. Every field above is available as a form — no terminal needed. Useful for quick exploration on phone or tablet.
+
+---
+
+## Sculpture Recognition — How It Works
+
+### The server requires the frontend to send a photo
+
+The server has **no camera and no video stream**. Recognition only happens when the frontend explicitly includes `image_base64` in the request. The pipeline is:
+
+```
+Frontend captures one frame
+    ↓  encodes as base64 JPEG
+    ↓  includes in POST /ask body
+Server calls GPT-4o Vision (~1–3 seconds)
+    ↓
+Returns { exhibit: "Venus de Milo", ... }
+```
+
+### This is not frame-by-frame — and that is intentional
+
+GPT-4o Vision takes 1–3 seconds per call, which makes continuous streaming impractical. The recommended integration pattern for XR:
+
+1. Unity continuously tracks `gaze_duration` on-device
+2. When `gaze_duration` crosses the 5-second threshold, trigger **one** capture + API call
+3. Cache the returned `exhibit` name for the rest of the interaction — no need to re-identify on every question
+
+This pattern aligns perfectly with the context router: gaze under 5 seconds returns `NO_RESPONSE` anyway, so recognition only fires at the exact moment the visitor is worth addressing.
+
+### If the image is unclear or not one of the eight sculptures
+
+The recognizer returns `confidence: "low"` or `name: "unknown"`. In that case, the server falls back to answering the question from the general knowledge base without sculpture-specific context.
 
 ---
 
@@ -86,174 +291,35 @@ Interactive docs at `http://localhost:8000/docs`.
 
 ### `GET /health`
 
-Health check.
-
 ```json
 { "status": "ok" }
 ```
 
----
-
-### `POST /ask`
-
-Main QA endpoint. Supports three usage patterns:
-
-#### Pattern 1 — Simplest (no device needed)
-
-No state, no mode. Defaults to `FULL_VOICE`.
-
-```json
-{
-  "question": "Who created the Winged Victory and when?"
-}
-```
-
-#### Pattern 2 — Direct mode (skip context routing)
-
-Specify the response length directly. Useful for frontend testing without sensor data.
-
-```json
-{
-  "question": "Who created the Winged Victory and when?",
-  "mode": "GLANCE_CARD"
-}
-```
-
-#### Pattern 3 — Full XR flow (context router active)
-
-Send sensor state from the device. The server decides the mode automatically.
-
-```json
-{
-  "question": "Who created the Winged Victory and when?",
-  "state": {
-    "crowd": "low",
-    "noise": "quiet",
-    "gaze_duration": 20.0
-  }
-}
-```
-
-#### With sculpture recognition (any pattern)
-
-Add a base64-encoded camera frame. The server calls GPT-4o Vision to identify the sculpture and enriches the answer accordingly.
-
-```json
-{
-  "question": "Tell me about this sculpture",
-  "image_base64": "<base64 JPEG/PNG>",
-  "state": { "crowd": "low", "noise": "quiet", "gaze_duration": 20.0 }
-}
-```
-
-#### Request fields
+### `POST /ask` — request fields
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `question` | `string` | Yes | Visitor's natural-language question |
-| `image_base64` | `string` | No | Base64 JPEG/PNG from camera; omit to skip recognition |
-| `state` | `object` | No | Sensor state from device; omit to skip context routing |
+| `image_base64` | `string` | No | Base64 JPEG/PNG; omit to skip recognition |
+| `state` | `object` | No | Sensor state; omit to skip context routing |
 | `state.crowd` | `"low"` \| `"crowded"` | No | Default: `"low"` |
 | `state.noise` | `"quiet"` \| `"noisy"` | No | Default: `"quiet"` |
 | `state.gaze_duration` | `float` (seconds) | No | Default: `0.0` |
-| `mode` | `string` | No | Direct override; see mode table below |
+| `mode` | `string` | No | Direct mode override — takes priority over `state` |
 
-#### Response
+**Priority:** `mode` (if set) → `state` (if set) → default `FULL_VOICE`
 
-```json
-{
-  "mode": "FULL_VOICE",
-  "answer": "The Winged Victory of Samothrace was created around 190 BC...",
-  "exhibit": "Winged Victory of Samothrace"
-}
-```
+### `POST /ask` — response fields
 
 | Field | Notes |
 |---|---|
-| `mode` | See mode table below |
-| `answer` | Text answer; empty string for `NO_RESPONSE` |
+| `mode` | The mode used: `NO_RESPONSE` \| `BRIEF_TEXT` \| `GLANCE_CARD` \| `FULL_VOICE` \| `BRIEF_TEXT_PROMPT` |
+| `answer` | Text answer; empty string when `mode` is `NO_RESPONSE` |
 | `exhibit` | Recognised sculpture name; empty string if not identified |
 
 ---
 
-## Response Modes
-
-| Mode | Trigger | Target length | Unity action |
-|---|---|---|---|
-| `NO_RESPONSE` | `gaze_duration < 5s` | — | Do nothing — visitor is passing by |
-| `BRIEF_TEXT` | `5–15s`, low crowd | ~50 words | Short text panel |
-| `GLANCE_CARD` | `5–15s`, crowded | ~20 words | Minimal one-line card |
-| `FULL_VOICE` | `>15s`, low crowd | ~150 words | Full overlay + audio via Meta TTS |
-| `BRIEF_TEXT_PROMPT` | `>15s`, crowded | ~60 words | Brief text + nudge toward quieter spot |
-
-**Note:** `noise` does not affect the mode — audio is delivered through earphones.
-
----
-
-## Context Routing Logic
-
-```
-gaze_duration < 5s                    →  NO_RESPONSE
-5s ≤ gaze_duration < 15s, crowded    →  GLANCE_CARD
-5s ≤ gaze_duration < 15s, low crowd  →  BRIEF_TEXT
-gaze_duration ≥ 15s, crowded         →  BRIEF_TEXT_PROMPT
-gaze_duration ≥ 15s, low crowd       →  FULL_VOICE
-```
-
-Thresholds are defined as constants in `context_router.py` and can be tuned without touching the logic.
-
----
-
-## Testing Without a Headset
-
-Once the server is running (locally or via the team URL), test from any browser or terminal.
-
-### Swagger UI
-
-Open `/docs` in a browser for an interactive interface — no code needed.
-
-### curl examples
-
-```bash
-# Health check
-curl <BASE_URL>/health
-
-# Simplest call — defaults to FULL_VOICE
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Tell me about this sculpture"}'
-
-# Specify mode directly
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Tell me about this sculpture", "mode": "GLANCE_CARD"}'
-
-# Full XR flow with sensor state
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "Tell me about this sculpture",
-    "state": {"crowd": "low", "noise": "quiet", "gaze_duration": 20.0}
-  }'
-```
-
-Replace `<BASE_URL>` with the URL provided by the team.
-
-### Demo scenarios
-
-| Scenario | `gaze_duration` | `crowd` | Expected mode |
-|---|---|---|---|
-| Passing by | `2.0` | `"low"` | `NO_RESPONSE` |
-| Brief interest | `8.0` | `"low"` | `BRIEF_TEXT` |
-| Quick glance, crowded | `10.0` | `"crowded"` | `GLANCE_CARD` |
-| Deeply engaged | `20.0` | `"low"` | `FULL_VOICE` |
-| Engaged, crowded | `20.0` | `"crowded"` | `BRIEF_TEXT_PROMPT` |
-
----
-
 ## Unity / Quest Integration
-
-Quest 3 connects over Wi-Fi or directly to the Railway URL.
 
 ```csharp
 private const string BASE_URL = "<ask a team member for the URL>";
@@ -264,12 +330,7 @@ IEnumerator AskServer(string question, float gazeDuration,
     var body = new AskRequest
     {
         question = question,
-        state = new AskState
-        {
-            crowd         = crowd,
-            noise         = noise,
-            gaze_duration = gazeDuration
-        }
+        state    = new AskState { crowd = crowd, noise = noise, gaze_duration = gazeDuration }
     };
 
     string json = JsonUtility.ToJson(body);
@@ -277,13 +338,21 @@ IEnumerator AskServer(string question, float gazeDuration,
     req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
     req.downloadHandler = new DownloadHandlerBuffer();
     req.SetRequestHeader("Content-Type", "application/json");
-
     yield return req.SendWebRequest();
 
     if (req.result == UnityWebRequest.Result.Success)
+        HandleResponse(JsonUtility.FromJson<AskResponse>(req.downloadHandler.text));
+}
+
+void HandleResponse(AskResponse resp)
+{
+    switch (resp.mode)
     {
-        var resp = JsonUtility.FromJson<AskResponse>(req.downloadHandler.text);
-        HandleResponse(resp);
+        case "NO_RESPONSE":       break;                          // visitor passing by
+        case "GLANCE_CARD":       ShowGlanceCard(resp.answer);   break;
+        case "BRIEF_TEXT":        ShowBriefText(resp.answer);    break;
+        case "FULL_VOICE":        ShowFullOverlay(resp.answer);  break;
+        case "BRIEF_TEXT_PROMPT": ShowBriefText(resp.answer);    break;
     }
 }
 ```
@@ -298,17 +367,15 @@ IEnumerator AskServer(string question, float gazeDuration,
 
 ## Deployment
 
-The server is deployed on Railway using the included `Dockerfile`.
+Deployed on Railway via the included `Dockerfile`. Redeploys automatically on every push to `main`.
 
-### Environment variable required
+### Required environment variable
 
 | Variable | Value |
 |---|---|
 | `OPENAI_API_KEY` | Your OpenAI API key (`sk-...`) |
 
-Railway injects the `PORT` variable automatically — no configuration needed.
-
-### Rebuild FAISS index (only if `exhibits_data.py` is updated)
+### Rebuild FAISS index (only needed after editing `exhibits_data.py`)
 
 ```bash
 python rag_engine.py --build
@@ -316,8 +383,6 @@ git add faiss_index/
 git commit -m "Rebuild FAISS index"
 git push origin main
 ```
-
-Railway will redeploy automatically on push.
 
 ---
 
