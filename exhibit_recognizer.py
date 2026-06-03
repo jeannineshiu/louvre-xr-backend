@@ -13,7 +13,12 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+def _get_client() -> OpenAI:
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY environment variable is not set")
+    return OpenAI(api_key=api_key)
 
 SYSTEM_PROMPT = """You are an expert museum guide AI assistant for ContextAR.
 This installation covers sculptures at the Louvre Museum and Jardin des Tuileries, Paris.
@@ -75,7 +80,7 @@ def recognize_exhibit(image: np.ndarray | str, detail: str = "low") -> dict:
         b64 = _encode_image(image)
 
     try:
-        response = client.chat.completions.create(
+        response = _get_client().chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
