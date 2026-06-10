@@ -518,6 +518,87 @@ EXHIBITS = [
         ),
     },
     {
+        "id": "miles_franklin_statue",
+        "name": "Miles Franklin Statue",
+        "artist": "Jacek Luszczyk",
+        "year": "2003",
+        "type": "sculpture",
+        "period": "Contemporary Australian Public Art, 2003",
+        "location": "MacMahon Street, Hurstville, Sydney (near Ritz Hotel)",
+        "key_facts": (
+            "Bronze public sculpture, life-size seated figure. "
+            "Created in 2003 by Polish-Australian sculptor Jacek Luszczyk. "
+            "Commemorates Miles Franklin (1879–1954), one of Australia's most celebrated authors. "
+            "Located on MacMahon Street, Hurstville, near the heritage Ritz Hotel, in the Georges River area of Sydney. "
+            "Temporarily removed in 2021 during street rejuvenation works and reinstalled in 2023 on a new plinth. "
+            "Sited near the former council chambers where Franklin completed some of her literary work, "
+            "and close to her former residence at Grey Street, Carlton, and her office in the Jolley's Building, Forest Road, Hurstville."
+        ),
+        "visual_description": (
+            "A life-size bronze seated figure of a woman in early twentieth-century dress, "
+            "depicted in a relaxed, contemplative pose as if pausing mid-thought or mid-sentence. "
+            "She is placed on a bench or low plinth, bringing her to the eye level of passers-by "
+            "and inviting an informal, personal encounter rather than the distant grandeur of a pedestal monument. "
+            "Her clothing reflects the fashion of the early 1900s — the period of her most famous work. "
+            "The bronze surface has developed a warm patina from years of outdoor exposure in the Sydney climate. "
+            "The figure faces the street, situated against the backdrop of the heritage Ritz Hotel facade, "
+            "connecting the literary past of the area with its present-day urban character."
+        ),
+        "historical_context": (
+            "Miles Franklin — full name Stella Maria Sarah Miles Franklin — was born on 14 October 1879 "
+            "in Talbingo, New South Wales, and died on 19 September 1954. "
+            "She published her debut novel My Brilliant Career in 1901 at age 21, "
+            "a semi-autobiographical work set in rural Australia that captured the independent spirit "
+            "of a young woman navigating the constraints of colonial society. "
+            "The novel was championed by Henry Lawson and became a landmark of Australian literature. "
+            "Franklin had significant personal connections to the Hurstville and Georges River area: "
+            "she maintained a residence at Grey Street, Carlton, and worked from an office in the Jolley's Building "
+            "on Forest Road, Hurstville. She wrote All That Swagger (1936) here. "
+            "Through her will, she established the Miles Franklin Literary Award, "
+            "Australia's most prestigious annual prize for literature about 'Australian life in any of its phases.' "
+            "Sculptor Jacek Luszczyk was commissioned by Georges River Council to create the work in 2003."
+        ),
+        "technique": (
+            "The statue is cast in bronze using the lost-wax (cire perdue) process — "
+            "the traditional method for large-scale figurative public sculpture. "
+            "A clay or wax model is built over an armature, "
+            "then encased in a mould; molten bronze is poured in after the wax is burned away. "
+            "The resulting cast is cleaned, chased, and patinated to achieve the final surface colour. "
+            "Jacek Luszczyk trained in classical figurative sculpture and is known for works "
+            "that prioritise naturalism and psychological presence over stylisation. "
+            "The decision to seat the figure at street level rather than raise her on a tall pedestal "
+            "is a characteristic of contemporary public memorial sculpture: "
+            "it creates democratic accessibility, allowing visitors to sit alongside the figure "
+            "and engage with her as a human presence rather than a distant monument."
+        ),
+        "story": (
+            "Miles Franklin spent years in the United States and London before returning to Australia in 1932, "
+            "settling eventually in Carlton, NSW, in the Georges River area. "
+            "It was here, in the suburb adjacent to Hurstville, that she wrote All That Swagger (1936), "
+            "working from her local office in the Jolley's Building on Forest Road. "
+            "She never married and devoted her later life to advocating for Australian writers and literature. "
+            "When she died in 1954 she left the bulk of her estate to fund the literary award that bears her name — "
+            "the Miles Franklin Award — which has since been won by Patrick White, Thomas Keneally, "
+            "Tim Winton, and many other major Australian authors. "
+            "The statue was temporarily removed in 2021 when MacMahon Street underwent rejuvenation works. "
+            "Its return in 2023 — on a new plinth, facing the Ritz Hotel — was welcomed by the local community "
+            "as a reaffirmation of the area's literary heritage. "
+            "EggMan28's 3D Gaussian splat capture of the statue (2022) now exists as a digital twin, "
+            "linking the physical work to its virtual counterpart in XR."
+        ),
+        "content": (
+            "The Miles Franklin Statue is a bronze public sculpture by Jacek Luszczyk, unveiled in 2003 "
+            "on MacMahon Street, Hurstville, in Sydney's Georges River area. "
+            "It commemorates Stella Miles Franklin (1879–1954), author of My Brilliant Career (1901) "
+            "and founder of Australia's most prestigious literary prize. "
+            "Depicted as a life-size seated figure in early twentieth-century dress, "
+            "the statue is placed at street level beside the heritage Ritz Hotel, "
+            "near the office and former residence Franklin used during her years in Hurstville. "
+            "She wrote All That Swagger here in 1936. "
+            "The statue was reinstalled in 2023 after temporary removal for street works."
+        ),
+    },
+    {
         "id": "air_maillol",
         "name": "Air",
         "artist": "Aristide Maillol",
