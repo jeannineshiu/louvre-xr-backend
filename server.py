@@ -13,7 +13,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from typing import Literal
 
 from rag_engine import RAGEngine
 import qa_pipeline
@@ -36,7 +37,7 @@ class AskStateInput(BaseModel):
 
 
 class HistoryMessage(BaseModel):
-    role:    str  # "user" | "assistant"
+    role:    Literal["user", "assistant"]
     content: str
 
 
@@ -46,6 +47,13 @@ class AskRequest(BaseModel):
     state:        AskStateInput | None    = None  # omit to skip context routing
     mode:         str | None             = None  # GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
     history:      list[HistoryMessage] | None = None  # prior turns: [{role, content}, ...]
+
+    @field_validator("question")
+    @classmethod
+    def question_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("question must not be empty or whitespace")
+        return v
 
 
 class AskResponse(BaseModel):

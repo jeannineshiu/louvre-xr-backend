@@ -19,7 +19,7 @@ import cv2
 
 from exhibit_recognizer import recognize_exhibit
 from rag_engine import RAGEngine
-from context_router import route, BRIEF_MAX, FULL_MAX
+from context_router import route, MODE_MAX_LENGTH
 
 
 def _b64_to_frame(image_b64: str) -> np.ndarray | None:
@@ -87,7 +87,7 @@ def run(
     # Step 3: Decide mode and generate answer
     if mode:
         # Direct override — skip context router entirely
-        max_len = FULL_MAX if mode == "FULL_VOICE" else BRIEF_MAX
+        max_len = MODE_MAX_LENGTH.get(mode)
         rag_result = rag.query(enriched_question, mode=mode, max_length=max_len, history=history)
         return {
             "mode":    mode,

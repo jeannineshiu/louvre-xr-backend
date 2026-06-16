@@ -20,8 +20,19 @@ crowd accepts "low" or "crowded"; any other value is treated as "low".
 from dataclasses import dataclass
 from rag_engine import RAGEngine
 
-# Answer length limits (characters)
-BRIEF_MAX = 160
+# Per-mode hard character caps (safety net — prompts already guide length)
+# GLANCE_CARD: ~20 words ≈ 120 chars → cap at 160
+# BRIEF_TEXT / BRIEF_TEXT_PROMPT: ~50–60 words ≈ 350 chars → cap at 450
+# FULL_VOICE: uncapped (prompt targets 120–150 words)
+MODE_MAX_LENGTH: dict[str, int | None] = {
+    "GLANCE_CARD":        160,
+    "BRIEF_TEXT":         450,
+    "BRIEF_TEXT_PROMPT":  450,
+    "FULL_VOICE":         None,
+}
+
+# Keep old names as aliases so nothing outside breaks if they were imported
+BRIEF_MAX = 450
 FULL_MAX  = None
 
 GAZE_THRESHOLD_INTEREST = 5.0   # seconds — below this, visitor is passing by
@@ -92,7 +103,7 @@ def route(question: str, rag: RAGEngine, state: dict, history: list[dict] | None
     if mode == "NO_RESPONSE":
         return RouterDecision(mode=mode, answer="", xr_action=xr_action, reason=reason)
 
-    max_len = FULL_MAX if mode == "FULL_VOICE" else BRIEF_MAX
+    max_len = MODE_MAX_LENGTH.get(mode)
     rag_result = rag.query(question, mode=mode, max_length=max_len, history=history)
 
     return RouterDecision(

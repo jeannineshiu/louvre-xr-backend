@@ -41,7 +41,8 @@ CHAT_MODEL  = "gpt-4o"
 # visitor's level of engagement and the environment they are standing in.
 
 _BASE_CONTEXT = (
-    "You are an audio guide for the Louvre Museum and Jardin des Tuileries, Paris. "
+    "You are an audio guide for the Louvre Museum, Jardin des Tuileries, Paris, "
+    "and one additional public sculpture in Sydney, Australia. "
     "The exhibition features iconic sculptures from antiquity to the 20th century. "
     "Use only the exhibit information below. "
     "Speak directly to the visitor as if they are standing in front of the sculpture.\n\n"
@@ -234,6 +235,8 @@ class RAGEngine:
             mode: _build_qa_chain(self._vectorstore, prompt)
             for mode, prompt in _PROMPTS.items()
         }
+        # Shared LLM instance for history-aware queries
+        self._llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.3)
 
     def query(self, question: str, mode: str = "BRIEF_TEXT",
               max_length: int = None, history: list[dict] | None = None) -> dict:
@@ -299,8 +302,7 @@ class RAGEngine:
                 messages.append(AIMessage(content=msg["content"]))
         messages.append(HumanMessage(content=question))
 
-        llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.3)
-        response = llm.invoke(messages)
+        response = self._llm.invoke(messages)
         answer = response.content.strip()
 
         if max_length and len(answer) > max_length:
