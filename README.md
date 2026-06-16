@@ -1,7 +1,7 @@
 # Louvre XR Backend
 
 FastAPI backend for an XR museum companion system.
-Exhibition: **Louvre Museum & Jardin des Tuileries, Paris** — eight iconic sculptures from antiquity to the 20th century.
+Exhibition: **Louvre Museum & Jardin des Tuileries, Paris** — nine sculptures from antiquity to the 20th century, including one additional public artwork in Sydney, Australia.
 
 > **Access:** This server is deployed on Railway. Contact a team member for the public URL — it is not published here to limit access to the team.
 
@@ -11,10 +11,10 @@ Exhibition: **Louvre Museum & Jardin des Tuileries, Paris** — eight iconic scu
 
 This is a **pure QA + routing service**. It has no sensors, no camera, and no background threads. All it does is:
 
-1. **Receive** a visitor's question + optional context (sensor state, camera image) from the frontend
+1. **Receive** a visitor's question + optional context (sensor state, camera image, conversation history) from the frontend
 2. **Identify** the sculpture in the image (if provided), using GPT-4o Vision
 3. **Decide** the appropriate response mode based on the visitor's context (gaze duration, crowd level)
-4. **Answer** the question using a RAG pipeline (FAISS vector search + GPT-4o), with a prompt tuned to the selected mode
+4. **Answer** the question using a RAG pipeline (FAISS vector search + GPT-4o), with a prompt tuned to the selected mode and full conversation history for follow-up awareness
 
 Everything that involves sensing the physical environment — gaze tracking, crowd detection, noise classification — happens on the XR device and is passed to this server as values in the request body.
 
@@ -22,12 +22,13 @@ Everything that involves sensing the physical environment — gaze tracking, cro
 XR Device (Unity / Quest / Phone / Browser)
   ├── measures gaze_duration, crowd, noise
   ├── captures camera frame (optional)
+  ├── maintains conversation history array (client-side)
   └── sends POST /ask
             ↓
 AI Server (this repo)
   ├── Step 1: GPT-4o Vision → identify sculpture (if image provided)
   ├── Step 2: Context Router → decide mode from sensor state
-  ├── Step 3: RAG Engine → FAISS retrieval + GPT-4o answer
+  ├── Step 3: RAG Engine → FAISS retrieval + GPT-4o answer (with history if provided)
   └── returns { mode, answer, exhibit }
 ```
 
@@ -56,7 +57,7 @@ louvre-ar-backend/
 
 ---
 
-## The Eight Sculptures
+## The Nine Sculptures
 
 | Sculpture | Artist | Date | Location |
 |---|---|---|---|
@@ -68,6 +69,7 @@ louvre-ar-backend/
 | The Seated Scribe | Unknown (Egyptian Old Kingdom) | c. 2620–2500 BC | Salle 635, Egyptian Antiquities |
 | Bastet Cat Statue | Unknown (Egyptian Late Period) | c. 664–332 BC | Salle 630, Egyptian Antiquities |
 | Air | Aristide Maillol | 1938 | Jardin des Tuileries |
+| Miles Franklin Statue | Jacek Luszczyk | 2003 | MacMahon Street, Hurstville, Sydney |
 
 Each sculpture has five structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`.
 
@@ -306,6 +308,7 @@ The recognizer returns `confidence: "low"` or `name: "unknown"`. In that case, t
 | `state.noise` | `"quiet"` \| `"noisy"` | No | Default: `"quiet"` |
 | `state.gaze_duration` | `float` (seconds) | No | Default: `0.0` |
 | `mode` | `string` | No | Direct mode override — takes priority over `state` |
+| `history` | `array` | No | Prior conversation turns — see [Conversation History](#conversation-history) |
 
 **Priority:** `mode` (if set) → `state` (if set) → default `FULL_VOICE`
 
@@ -359,9 +362,76 @@ void HandleResponse(AskResponse resp)
 
 ```csharp
 [Serializable] public class AskState    { public string crowd; public string noise; public float gaze_duration; }
-[Serializable] public class AskRequest  { public string question; public string image_base64; public AskState state; }
+[Serializable] public class AskRequest  { public string question; public string image_base64; public AskState state; public HistoryMessage[] history; }
 [Serializable] public class AskResponse { public string mode; public string answer; public string exhibit; }
+[Serializable] public class HistoryMessage { public string role; public string content; }
 ```
+
+---
+
+## Conversation History
+
+The server is stateless — the frontend is responsible for maintaining and sending the conversation history with each request. This means follow-up questions like "What technique did he use?" or "Tell me more about that" resolve correctly without the visitor needing to repeat context.
+
+### How it works
+
+Each turn, the frontend appends the visitor's question and the server's answer to a local history array, then includes the full array in the next request. The server passes this to GPT-4o as a full message thread alongside the retrieved exhibit knowledge.
+
+### Request format
+
+```json
+{
+  "question": "What technique did he use?",
+  "mode": "FULL_VOICE",
+  "history": [
+    { "role": "user",      "content": "Who made the Dying Slave?" },
+    { "role": "assistant", "content": "The Dying Slave was carved by Michelangelo between 1513 and 1516." }
+  ]
+}
+```
+
+### Unity (C#) integration pattern
+
+```csharp
+private List<HistoryMessage> _history = new();
+
+IEnumerator AskServer(string question, float gazeDuration, string crowd, string noise)
+{
+    var body = new AskRequest
+    {
+        question = question,
+        state    = new AskState { crowd = crowd, noise = noise, gaze_duration = gazeDuration },
+        history  = _history.ToArray()
+    };
+
+    string json = JsonUtility.ToJson(body);
+    using var req = new UnityWebRequest($"{BASE_URL}/ask", "POST");
+    req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+    req.downloadHandler = new DownloadHandlerBuffer();
+    req.SetRequestHeader("Content-Type", "application/json");
+    yield return req.SendWebRequest();
+
+    if (req.result == UnityWebRequest.Result.Success)
+    {
+        var resp = JsonUtility.FromJson<AskResponse>(req.downloadHandler.text);
+
+        // Append this turn to history before handling the response
+        _history.Add(new HistoryMessage { role = "user",      content = question });
+        _history.Add(new HistoryMessage { role = "assistant", content = resp.answer });
+
+        HandleResponse(resp);
+    }
+}
+
+// Call this when the visitor moves to a new exhibit
+public void ClearHistory() => _history.Clear();
+```
+
+### Notes
+
+- **History is optional** — omit it entirely for the first question of a session; the server defaults to stateless RAG.
+- **Clear history** when the visitor moves to a new sculpture so the new conversation starts fresh.
+- There is no server-side session state — if the app restarts, simply start a new history array.
 
 ---
 
