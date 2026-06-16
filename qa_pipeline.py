@@ -39,8 +39,9 @@ def run(
     question:  str,
     image_b64: str | None,
     rag:       RAGEngine,
-    api_state: dict | None = None,
-    mode:      str | None  = None,
+    api_state: dict | None  = None,
+    mode:      str | None   = None,
+    history:   list[dict] | None = None,
 ) -> dict:
     """
     Full QA pipeline. No hardware access — everything is passed in.
@@ -87,7 +88,7 @@ def run(
     if mode:
         # Direct override — skip context router entirely
         max_len = FULL_MAX if mode == "FULL_VOICE" else BRIEF_MAX
-        rag_result = rag.query(enriched_question, mode=mode, max_length=max_len)
+        rag_result = rag.query(enriched_question, mode=mode, max_length=max_len, history=history)
         return {
             "mode":    mode,
             "answer":  rag_result["answer"],
@@ -96,7 +97,7 @@ def run(
 
     if api_state:
         # Full Unity flow — context router decides
-        decision = route(question=enriched_question, rag=rag, state=api_state)
+        decision = route(question=enriched_question, rag=rag, state=api_state, history=history)
         return {
             "mode":    decision.mode,
             "answer":  decision.answer,
@@ -104,7 +105,7 @@ def run(
         }
 
     # Fallback — no state, no mode: give a full answer
-    rag_result = rag.query(enriched_question, mode=DEFAULT_MODE)
+    rag_result = rag.query(enriched_question, mode=DEFAULT_MODE, history=history)
     return {
         "mode":    DEFAULT_MODE,
         "answer":  rag_result["answer"],

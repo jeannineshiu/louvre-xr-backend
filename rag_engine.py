@@ -23,6 +23,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_classic.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from exhibits_data import EXHIBITS
 
@@ -108,6 +109,29 @@ _PROMPTS = {
 
 # Fallback for any unrecognised mode
 _DEFAULT_PROMPT = PROMPT_BRIEF_TEXT
+
+# Mode-specific instruction strings for the history-aware path
+_MODE_INSTRUCTIONS = {
+    "GLANCE_CARD": (
+        "Answer in exactly ONE sentence (maximum 20 words). "
+        "State only the single most surprising or memorable fact."
+    ),
+    "BRIEF_TEXT": (
+        "Answer in 2–3 sentences (around 50 words). "
+        "Give the key fact and one interesting detail. Be clear and engaging."
+    ),
+    "FULL_VOICE": (
+        "Answer in 4–6 sentences (around 120–150 words). "
+        "Include: the direct answer to the question, relevant historical context, "
+        "an interesting story or surprising detail, and a closing thought that invites "
+        "the visitor to look more closely at the sculpture. Be warm and immersive."
+    ),
+    "BRIEF_TEXT_PROMPT": (
+        "Answer in 2–3 sentences (around 50 words). "
+        "At the end, add one friendly sentence suggesting the visitor find a quieter spot "
+        "for a more complete audio guide experience."
+    ),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +236,7 @@ class RAGEngine:
         }
 
     def query(self, question: str, mode: str = "BRIEF_TEXT",
-              max_length: int = None) -> dict:
+              max_length: int = None, history: list[dict] | None = None) -> dict:
         """
         Answer a visitor question using the knowledge base.
 
@@ -220,8 +244,8 @@ class RAGEngine:
             question:   natural language question
             mode:       response mode — selects the appropriate prompt.
                         One of: GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
-            max_length: optional hard character cap (safety net; the prompt
-                        already guides length so this should rarely trigger)
+            max_length: optional hard character cap
+            history:    optional prior turns [{role: "user"|"assistant", content: str}, ...]
 
         Returns:
             {
@@ -229,6 +253,9 @@ class RAGEngine:
                 "sources": list[str]   # exhibit names retrieved
             }
         """
+        if history:
+            return self._query_with_history(question, mode, max_length, history)
+
         chain = self._chains.get(mode, self._chains["BRIEF_TEXT"])
         result = chain.invoke({"query": question})
         answer = result["result"].strip()
@@ -242,6 +269,44 @@ class RAGEngine:
             for doc, score in scored
             if score < 1.3
         ]
+        return {"answer": answer, "sources": sources}
+
+    def _query_with_history(self, question: str, mode: str,
+                            max_length: int | None, history: list[dict]) -> dict:
+        """History-aware query: retrieves docs, then calls GPT-4o with full conversation context."""
+        # Retrieve relevant exhibit docs
+        docs = self._vectorstore.similarity_search(question, k=2)
+        context = "\n\n---\n\n".join(doc.page_content for doc in docs)
+
+        instructions = _MODE_INSTRUCTIONS.get(mode, _MODE_INSTRUCTIONS["BRIEF_TEXT"])
+        system_content = (
+            "You are an audio guide for the Louvre Museum, Jardin des Tuileries, Paris, "
+            "and one additional public sculpture in Sydney, Australia. "
+            "The exhibition features iconic sculptures from antiquity to the 20th century. "
+            "Use only the exhibit information below. "
+            "Speak directly to the visitor as if they are standing in front of the sculpture. "
+            "You have access to the conversation history — use it to give contextually aware answers "
+            "and avoid repeating information already given.\n\n"
+            f"Exhibit information:\n{context}\n\n"
+            f"{instructions}"
+        )
+
+        messages = [SystemMessage(content=system_content)]
+        for msg in history:
+            if msg["role"] == "user":
+                messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                messages.append(AIMessage(content=msg["content"]))
+        messages.append(HumanMessage(content=question))
+
+        llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.3)
+        response = llm.invoke(messages)
+        answer = response.content.strip()
+
+        if max_length and len(answer) > max_length:
+            answer = answer[:max_length].rsplit(" ", 1)[0] + "…"
+
+        sources = [doc.metadata["name"] for doc in docs]
         return {"answer": answer, "sources": sources}
 
     def find_similar(self, exhibit_name: str, k: int = 2) -> list[str]:

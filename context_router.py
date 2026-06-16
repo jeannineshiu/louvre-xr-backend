@@ -75,7 +75,7 @@ def _decide_mode(sensor_state: dict) -> tuple[str, str, str | None]:
     )
 
 
-def route(question: str, rag: RAGEngine, state: dict) -> RouterDecision:
+def route(question: str, rag: RAGEngine, state: dict, history: list[dict] | None = None) -> RouterDecision:
     """
     Main entry point.
 
@@ -93,7 +93,7 @@ def route(question: str, rag: RAGEngine, state: dict) -> RouterDecision:
         return RouterDecision(mode=mode, answer="", xr_action=xr_action, reason=reason)
 
     max_len = FULL_MAX if mode == "FULL_VOICE" else BRIEF_MAX
-    rag_result = rag.query(question, mode=mode, max_length=max_len)
+    rag_result = rag.query(question, mode=mode, max_length=max_len, history=history)
 
     return RouterDecision(
         mode=mode,

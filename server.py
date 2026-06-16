@@ -35,11 +35,17 @@ class AskStateInput(BaseModel):
     gaze_duration: float = 0.0     # seconds the visitor has been looking at the exhibit
 
 
+class HistoryMessage(BaseModel):
+    role:    str  # "user" | "assistant"
+    content: str
+
+
 class AskRequest(BaseModel):
     question:     str
-    image_base64: str | None        = None  # base64 JPEG/PNG from camera; omit to skip recognition
-    state:        AskStateInput | None = None  # omit to skip context routing
-    mode:         str | None        = None  # GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
+    image_base64: str | None              = None  # base64 JPEG/PNG from camera; omit to skip recognition
+    state:        AskStateInput | None    = None  # omit to skip context routing
+    mode:         str | None             = None  # GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
+    history:      list[HistoryMessage] | None = None  # prior turns: [{role, content}, ...]
 
 
 class AskResponse(BaseModel):
@@ -102,6 +108,7 @@ def ask(req: AskRequest):
         api_state=req.state.model_dump() if req.state else None,
         mode=req.mode,
         rag=_rag,
+        history=[m.model_dump() for m in req.history] if req.history else None,
     )
 
     return AskResponse(
