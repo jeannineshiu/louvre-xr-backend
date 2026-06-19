@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ContextAR — Museum Guide</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --gold:     #c9a84c;
+      --gold-dim: #c9a84c44;
+      --bg:       #0a0e1a;
+      --surface:  #13182a;
+      --border:   #2a3560;
+      --text:     #e8dcc8;
+      --muted:    #7a8299;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, 'Times New Roman', serif;
+      overflow: hidden;
+    }
+
+    .shell {
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 14px 20px 10px;
+      text-align: center;
+      flex-shrink: 0;
+      border-bottom: 1px solid #ffffff08;
+    }
+    header h1 {
+      font-size: 1rem;
+      letter-spacing: 0.18em;
+      color: var(--gold);
+      text-transform: uppercase;
+    }
+    header p {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 2px;
+      font-style: italic;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Scan button ── */
+    .scan-wrap { padding: 12px 20px 6px; flex-shrink: 0; }
+
+    .scan-btn {
+      width: 100%;
+      padding: 13px 16px;
+      background: linear-gradient(135deg, #1a2240, #222d50);
+      border: 1px solid var(--gold-dim);
+      border-radius: 12px;
+      color: var(--gold);
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: opacity 0.15s;
+      font-family: inherit;
+    }
+    .scan-btn:active { opacity: 0.65; }
+    .scan-btn.scanned {
+      background: linear-gradient(135deg, #182018, #202820);
+      border-color: #6a9a6a66;
+      color: #8ab48a;
+    }
+
+    /* ── Exhibit badge ── */
+    .badge {
+      margin: 6px 20px;
+      padding: 7px 14px;
+      background: #c9a84c12;
+      border: 1px solid var(--gold-dim);
+      border-radius: 8px;
+      font-size: 0.75rem;
+      color: var(--gold);
+      display: none;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .badge.on { display: flex; }
+    .badge button {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: #c9a84c66;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0 2px;
+    }
+
+    /* ── Chat ── */
+    .chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 20px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── Messages ── */
+    .msg {
+      max-width: 90%;
+      padding: 11px 15px;
+      border-radius: 16px;
+      line-height: 1.6;
+      font-size: 0.875rem;
+      animation: pop 0.25s ease;
+    }
+    @keyframes pop {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: #1e2d4a;
+      border: 1px solid #2a3d66;
+      color: #c0d4f0;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.ai {
+      align-self: flex-start;
+      background: #14181f;
+      border: 1px solid #252535;
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+    .msg.ai .lbl {
+      font-size: 0.65rem;
+      color: var(--gold);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .msg.thinking {
+      align-self: flex-start;
+      background: #14181f;
+      border: 1px solid #252535;
+      color: var(--muted);
+      font-style: italic;
+      border-bottom-left-radius: 4px;
+    }
+    .msg.error {
+      align-self: flex-start;
+      background: #1f1015;
+      border: 1px solid #5a2020;
+      color: #e07070;
+      border-bottom-left-radius: 4px;
+    }
+
+    /* ── Speaking pill ── */
+    .speaking-pill {
+      position: fixed;
+      top: 12px; right: 14px;
+      background: var(--gold);
+      color: #0a0e1a;
+      border-radius: 20px;
+      padding: 3px 11px;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .speaking-pill.on { opacity: 1; }
+
+    /* ── Input bar ── */
+    .input-bar {
+      padding: 10px 20px 18px;
+      flex-shrink: 0;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: linear-gradient(0deg, var(--bg) 75%, transparent);
+    }
+    .text-wrap {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      padding: 4px 14px;
+    }
+    .text-wrap input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 0.875rem;
+      font-family: inherit;
+      padding: 7px 0;
+      min-width: 0;
+    }
+    .text-wrap input::placeholder { color: #353d5a; }
+
+    .icon-btn {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 1.15rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.18s;
+      font-family: inherit;
+    }
+    .icon-btn.send {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: #0a0e1a;
+      font-size: 1rem;
+    }
+    .icon-btn.send:disabled {
+      background: #2a2a3a;
+      border-color: #2a2a3a;
+      color: #3a3a5a;
+      cursor: default;
+    }
+    .icon-btn.listening {
+      background: #3a1515;
+      border-color: #b04040;
+      color: #e07070;
+      animation: pulse 1s infinite;
+    }
+    .icon-btn.stop-speak {
+      background: #1a2a3a;
+      border-color: var(--gold-dim);
+      color: var(--gold);
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 #c0505040; }
+      50%      { box-shadow: 0 0 0 7px #c0505000; }
+    }
+
+    #cameraInput { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header>
+    <h1>ContextAR</h1>
+    <p>Louvre Museum &amp; Tuileries · AI Guide</p>
+  </header>
+
+  <div class="scan-wrap">
+    <button class="scan-btn" id="scanBtn" onclick="triggerCamera()">
+      <span>📷</span>
+      <span id="scanLabel">Scan a sculpture to begin</span>
+    </button>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+  </div>
+
+  <div class="badge" id="badge">
+    <span>🏛</span>
+    <span id="badgeName">Identifying…</span>
+    <button onclick="newSession()" title="New scan">✕</button>
+  </div>
+
+  <div class="chat" id="chat">
+    <div class="msg ai">
+      <div class="lbl">Guide</div>
+      Point your camera at a sculpture, then ask me anything — by voice or by typing.
+    </div>
+  </div>
+
+  <div class="speaking-pill" id="speakPill">🔊 Speaking</div>
+
+  <div class="input-bar">
+    <button class="icon-btn" id="micBtn" onclick="toggleMic()" title="Speak">🎤</button>
+    <div class="text-wrap">
+      <input type="text" id="textIn" placeholder="Ask about this sculpture…"
+             oninput="onType()" onkeydown="onKey(event)">
+    </div>
+    <button class="icon-btn send" id="sendBtn" onclick="submitQuestion()" disabled>➤</button>
+  </div>
+
+</div>
+
+<script>
+// ── Config ───────────────────────────────────────────────────────────────────
+// When served from Railway via FastAPI, use the same origin (no hardcoded URL needed)
+const BASE_URL = window.location.origin;
+
+// ── State ────────────────────────────────────────────────────────────────────
+let history        = [];
+let imageB64       = null;
+let currentExhibit = '';
+let isListening    = false;
+let isSpeaking     = false;
+let recognition    = null;
+let busy           = false;
+
+// ── DOM ──────────────────────────────────────────────────────────────────────
+const chatEl    = document.getElementById('chat');
+const textIn    = document.getElementById('textIn');
+const sendBtn   = document.getElementById('sendBtn');
+const micBtn    = document.getElementById('micBtn');
+const scanLabel = document.getElementById('scanLabel');
+const badge     = document.getElementById('badge');
+const badgeName = document.getElementById('badgeName');
+const speakPill = document.getElementById('speakPill');
+const camInput  = document.getElementById('cameraInput');
+
+// ── Text input ───────────────────────────────────────────────────────────────
+function onType() { sendBtn.disabled = busy || textIn.value.trim() === ''; }
+function onKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!sendBtn.disabled) submitQuestion(); }
+}
+
+// ── Camera ───────────────────────────────────────────────────────────────────
+function triggerCamera() { stopSpeaking(); camInput.click(); }
+
+camInput.addEventListener('change', async () => {
+  const file = camInput.files[0];
+  if (!file) return;
+
+  history = []; currentExhibit = '';
+  imageB64 = await resizeToB64(file, 1024);
+
+  scanLabel.textContent = 'Tap to scan a different sculpture';
+  document.getElementById('scanBtn').className = 'scan-btn scanned';
+  badgeName.textContent = 'Identifying…';
+  badge.className = 'badge on';
+
+  await callAPI('Please identify and introduce the sculpture I am looking at.', true);
+  camInput.value = '';
+});
+
+async function resizeToB64(file, maxPx) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width: w, height: h } = img;
+      if (w > maxPx || h > maxPx) {
+        if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else       { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(cv.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    img.src = url;
+  });
+}
+
+// ── Session ──────────────────────────────────────────────────────────────────
+function newSession() {
+  history = []; imageB64 = null; currentExhibit = '';
+  stopSpeaking();
+  scanLabel.textContent = 'Scan a sculpture to begin';
+  document.getElementById('scanBtn').className = 'scan-btn';
+  badge.className = 'badge';
+}
+
+// ── Voice input ───────────────────────────────────────────────────────────────
+function toggleMic() {
+  if (isSpeaking) { stopSpeaking(); return; }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    alert('Voice input is not supported on this browser.\nPlease use Chrome on Android or Safari on iOS.');
+    return;
+  }
+  if (isListening) { recognition?.stop(); return; }
+
+  recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onstart = () => {
+    isListening = true;
+    micBtn.className = 'icon-btn listening';
+    micBtn.textContent = '⏹';
+  };
+  recognition.onresult = e => {
+    const t = e.results[0][0].transcript.trim();
+    if (t) { textIn.value = t; submitQuestion(); }
+  };
+  recognition.onerror = recognition.onend = () => setMicIdle();
+  recognition.start();
+}
+
+function setMicIdle() {
+  isListening = false;
+  micBtn.className = 'icon-btn';
+  micBtn.textContent = '🎤';
+}
+
+// ── Voice output ──────────────────────────────────────────────────────────────
+function speak(text) {
+  if (!text) return;
+  stopSpeaking();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'en-US'; utt.rate = 0.92; utt.pitch = 1.0;
+
+  const voices = speechSynthesis.getVoices();
+  const pick = voices.find(v => v.lang.startsWith('en') &&
+    /Natural|Neural|Samantha|Daniel|Karen|Moira/.test(v.name))
+    || voices.find(v => v.lang.startsWith('en'));
+  if (pick) utt.voice = pick;
+
+  utt.onstart = () => {
+    isSpeaking = true;
+    speakPill.className = 'speaking-pill on';
+    micBtn.className = 'icon-btn stop-speak';
+    micBtn.textContent = '⏹';
+  };
+  utt.onend = utt.onerror = () => {
+    isSpeaking = false;
+    speakPill.className = 'speaking-pill';
+    setMicIdle();
+  };
+  speechSynthesis.speak(utt);
+}
+
+function stopSpeaking() {
+  speechSynthesis.cancel();
+  isSpeaking = false;
+  speakPill.className = 'speaking-pill';
+  setMicIdle();
+}
+
+// ── Chat helpers ──────────────────────────────────────────────────────────────
+function addMsg(type, text) {
+  const d = document.createElement('div');
+  d.className = `msg ${type}`;
+  if (type === 'ai') {
+    d.innerHTML = `<div class="lbl">Guide</div>${esc(text)}`;
+  } else if (type === 'error') {
+    d.innerHTML = `<div class="lbl">Error</div>${esc(text)}`;
+  } else {
+    d.textContent = text;
+  }
+  chatEl.appendChild(d);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return d;
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/\n/g,'<br>');
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+async function submitQuestion() {
+  const q = textIn.value.trim();
+  if (!q || busy) return;
+  textIn.value = '';
+  sendBtn.disabled = true;
+  stopSpeaking();
+  addMsg('user', q);
+  await callAPI(q, false);
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function callAPI(question, isIntro) {
+  busy = true;
+  const thinking = addMsg('thinking', 'Thinking…');
+
+  const body = { question, mode: 'FULL_VOICE' };
+  if (history.length)          body.history      = history;
+  if (isIntro && imageB64)     body.image_base64  = imageB64;
+
+  try {
+    const res = await fetch(`${BASE_URL}/ask`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+
+    thinking.remove();
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    if (data.exhibit && data.exhibit !== currentExhibit) {
+      currentExhibit = data.exhibit;
+      badgeName.textContent = data.exhibit;
+      badge.className = 'badge on';
+    } else if (!data.exhibit && isIntro) {
+      badgeName.textContent = 'Sculpture not identified';
+    }
+
+    const answer = data.answer || '';
+    if (answer) {
+      addMsg('ai', answer);
+      speak(answer);
+      const storedQ = isIntro ? 'Please introduce this sculpture.' : question;
+      history.push({ role: 'user',      content: storedQ });
+      history.push({ role: 'assistant', content: answer });
+    }
+
+  } catch (err) {
+    thinking.remove();
+    addMsg('error', `Could not reach the server: ${err.message}`);
+  } finally {
+    busy = false;
+    onType();
+  }
+}
+
+// Preload TTS voices
+speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+if (speechSynthesis.getVoices().length) speechSynthesis.getVoices();
+</script>
+</body>
+</html>
