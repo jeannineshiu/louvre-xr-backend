@@ -74,7 +74,7 @@ def run(
             recognition = recognize_exhibit(frame)
             if (
                 "error" not in recognition
-                and recognition.get("confidence") in ("high", "medium")
+                and recognition.get("confidence") == "high"
                 and recognition.get("name", "unknown").lower() != "unknown"
             ):
                 exhibit_name = recognition["name"]
