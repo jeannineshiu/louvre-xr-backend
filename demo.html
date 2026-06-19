@@ -408,7 +408,17 @@ function toggleMic() {
     const t = e.results[0][0].transcript.trim();
     if (t) { textIn.value = t; submitQuestion(); }
   };
-  recognition.onerror = recognition.onend = () => setMicIdle();
+  recognition.onerror = e => {
+    const msg = {
+      'not-allowed':    'Microphone permission denied. Please allow access in Settings → Safari → Microphone.',
+      'audio-capture':  'Microphone not found or already in use.',
+      'network':        'Network error — speech recognition requires an internet connection.',
+      'no-speech':      null, // silent timeout, just reset
+    }[e.error] || `Speech error: ${e.error}`;
+    if (msg) addMsg('error', msg);
+    setMicIdle();
+  };
+  recognition.onend = () => setMicIdle();
   recognition.start();
 }
 
