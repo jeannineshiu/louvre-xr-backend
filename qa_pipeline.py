@@ -68,9 +68,11 @@ def run(
     """
     # Step 1: Identify exhibit from camera frame (optional)
     exhibit_name = ""
+    image_scanned = False  # True when an image was provided (regardless of recognition result)
     if image_b64:
         frame = _b64_to_frame(image_b64)
         if frame is not None:
+            image_scanned = True
             recognition = recognize_exhibit(frame, detail="high")
             if (
                 "error" not in recognition
@@ -78,6 +80,22 @@ def run(
                 and recognition.get("name", "unknown").lower() != "unknown"
             ):
                 exhibit_name = recognition["name"]
+
+    # If an image was scanned but not matched to any of the nine sculptures,
+    # return a clear explanation instead of letting the RAG guess.
+    if image_scanned and not exhibit_name:
+        return {
+            "mode":    mode or DEFAULT_MODE,
+            "answer": (
+                "I wasn't able to identify this sculpture as one of the nine works in my system. "
+                "I can tell you about: the Winged Victory of Samothrace, Venus de Milo, "
+                "Cupid and Psyche, the Borghese Gladiator, the Dying Slave, the Seated Scribe, "
+                "the Bastet Cat Statue, Air by Aristide Maillol, or the Miles Franklin Statue "
+                "in Hurstville, Sydney. Try scanning again with the sculpture clearly in frame, "
+                "or ask me about any of those works."
+            ),
+            "exhibit": "",
+        }
 
     # Step 2: Enrich question with exhibit context if recognised
     enriched_question = (

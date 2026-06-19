@@ -577,22 +577,24 @@ async function callAPI(question, isIntro) {
 
     const data = await res.json();
 
-    if (data.exhibit && data.exhibit !== currentExhibit) {
-      currentExhibit = data.exhibit;
-      badgeName.textContent = data.exhibit;
-      badge.className = 'badge on';
-    } else if (!data.exhibit && isIntro) {
-      badgeName.textContent = 'Sculpture not identified';
-    }
-
     const answer = data.answer || '';
     if (answer) {
       addMsg('ai', answer);
       speak(answer);
-      // Store the original question (without exhibit prefix) for clean history
       const storedQ = isIntro ? 'Please introduce this sculpture.' : question;
       history.push({ role: 'user',      content: storedQ });
       history.push({ role: 'assistant', content: answer });
+    }
+
+    if (isIntro) {
+      if (data.exhibit) {
+        currentExhibit = data.exhibit;
+        badgeName.textContent = data.exhibit;
+        badge.className = 'badge on';
+      } else {
+        badgeName.textContent = 'Not in system — try scanning again';
+        badge.className = 'badge on';
+      }
     }
 
   } catch (err) {
