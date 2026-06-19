@@ -316,8 +316,8 @@ let audioUnlocked = false;
 function unlockAudio() {
   if (audioUnlocked) return;
   const utt = new SpeechSynthesisUtterance('');
-  speechSynthesis.speak(utt);
-  speechSynthesis.cancel();
+  utt.volume = 0;
+  speechSynthesis.speak(utt); // silent, lets iOS unlock the audio context
   audioUnlocked = true;
 }
 document.addEventListener('click', unlockAudio, { once: true });
@@ -397,12 +397,15 @@ function newSession() {
 }
 
 // ── Voice input ───────────────────────────────────────────────────────────────
+let listeningBubble = null;
+
 function toggleMic() {
   if (isSpeaking) { stopSpeaking(); return; }
+  if (busy) return; // API call in progress — ignore tap
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    alert('Voice input is not supported on this browser.\nPlease use Chrome on Android or Safari on iOS.');
+    alert('Voice input is not supported on this browser.\nPlease use Safari on iPhone or Chrome on Android.');
     return;
   }
   if (isListening) { recognition?.stop(); return; }
@@ -410,35 +413,56 @@ function toggleMic() {
   recognition = new SR();
   recognition.lang = 'en-US';
   recognition.continuous = false;
-  recognition.interimResults = false;
+  recognition.interimResults = true; // needed on iOS Safari to get any results
 
   recognition.onstart = () => {
     isListening = true;
     micBtn.className = 'icon-btn listening';
     micBtn.textContent = '⏹';
+    listeningBubble = addMsg('thinking', '🎤 Listening…');
   };
+
   recognition.onresult = e => {
-    const t = Array.from(e.results)
-      .map(r => r[0].transcript)
-      .join('')
-      .trim();
-    if (!t) return;
-    // Show question immediately in chat, then call API directly
-    stopSpeaking();
-    addMsg('user', t);
-    callAPI(t, false);
+    const results = Array.from(e.results);
+    // Show interim transcript live in the bubble
+    const interim = results.map(r => r[0].transcript).join('');
+    if (listeningBubble) listeningBubble.textContent = `🎤 ${interim}`;
+
+    // When a final result arrives, submit it
+    const final = results.find(r => r.isFinal);
+    if (final) {
+      const t = final[0].transcript.trim();
+      if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
+      if (!t) return;
+      stopSpeaking();
+      addMsg('user', t);
+      callAPI(t, false);
+    }
   };
+
+  recognition.onnomatch = () => {
+    if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
+    addMsg('error', "Couldn't catch that — please try again.");
+    setMicIdle();
+  };
+
   recognition.onerror = e => {
+    if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
     const msg = {
-      'not-allowed':    'Microphone permission denied. Please allow access in Settings → Safari → Microphone.',
-      'audio-capture':  'Microphone not found or already in use.',
-      'network':        'Network error — speech recognition requires an internet connection.',
-      'no-speech':      null, // silent timeout, just reset
-    }[e.error] || `Speech error: ${e.error}`;
+      'not-allowed':   'Microphone permission denied. Go to Settings → Safari → Microphone and allow this site.',
+      'audio-capture': 'Microphone not found or already in use.',
+      'network':       'Network error — speech recognition needs an internet connection.',
+      'no-speech':     null,
+    }[e.error] ?? `Speech error: ${e.error}`;
     if (msg) addMsg('error', msg);
     setMicIdle();
   };
-  recognition.onend = () => setMicIdle();
+
+  recognition.onend = () => {
+    if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
+    setMicIdle();
+  };
+
   recognition.start();
 }
 
