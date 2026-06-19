@@ -548,7 +548,7 @@ async function callAPI(question, isIntro) {
     ? `[Regarding: ${currentExhibit}] ${question}`
     : question;
 
-  const body = { question: apiQuestion, mode: 'FULL_VOICE' };
+  const body = { question: apiQuestion, mode: isIntro ? 'BRIEF_TEXT' : 'FULL_VOICE' };
   if (history.length)          body.history      = history;
   if (isIntro && imageB64)     body.image_base64  = imageB64;
 
