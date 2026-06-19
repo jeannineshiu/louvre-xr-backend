@@ -543,7 +543,12 @@ async function callAPI(question, isIntro) {
   busy = true;
   const thinking = addMsg('thinking', 'Thinking…');
 
-  const body = { question, mode: 'FULL_VOICE' };
+  // Prefix follow-up questions with the exhibit name so FAISS retrieves the right docs
+  const apiQuestion = (!isIntro && currentExhibit)
+    ? `[Regarding: ${currentExhibit}] ${question}`
+    : question;
+
+  const body = { question: apiQuestion, mode: 'FULL_VOICE' };
   if (history.length)          body.history      = history;
   if (isIntro && imageB64)     body.image_base64  = imageB64;
 
@@ -575,6 +580,7 @@ async function callAPI(question, isIntro) {
     if (answer) {
       addMsg('ai', answer);
       speak(answer);
+      // Store the original question (without exhibit prefix) for clean history
       const storedQ = isIntro ? 'Please introduce this sculpture.' : question;
       history.push({ role: 'user',      content: storedQ });
       history.push({ role: 'assistant', content: answer });
