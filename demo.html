@@ -309,6 +309,19 @@
 // When served from Railway via FastAPI, use the same origin (no hardcoded URL needed)
 const BASE_URL = window.location.origin;
 
+// ── iOS audio unlock ─────────────────────────────────────────────────────────
+// iOS Safari blocks speechSynthesis.speak() unless called within a user gesture.
+// We unlock it on the very first tap anywhere on the page.
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  const utt = new SpeechSynthesisUtterance('');
+  speechSynthesis.speak(utt);
+  speechSynthesis.cancel();
+  audioUnlocked = true;
+}
+document.addEventListener('click', unlockAudio, { once: true });
+
 // ── State ────────────────────────────────────────────────────────────────────
 let history        = [];
 let imageB64       = null;
@@ -405,8 +418,15 @@ function toggleMic() {
     micBtn.textContent = '⏹';
   };
   recognition.onresult = e => {
-    const t = e.results[0][0].transcript.trim();
-    if (t) { textIn.value = t; submitQuestion(); }
+    const t = Array.from(e.results)
+      .map(r => r[0].transcript)
+      .join('')
+      .trim();
+    if (!t) return;
+    // Show question immediately in chat, then call API directly
+    stopSpeaking();
+    addMsg('user', t);
+    callAPI(t, false);
   };
   recognition.onerror = e => {
     const msg = {
