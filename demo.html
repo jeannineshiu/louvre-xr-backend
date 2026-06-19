@@ -281,7 +281,8 @@
   <div class="badge" id="badge">
     <span>🏛</span>
     <span id="badgeName">Identifying…</span>
-    <button onclick="newSession()" title="New scan">✕</button>
+    <button onclick="wrongExhibit()" title="Wrong sculpture? Clear identification" style="font-size:0.7rem; padding: 2px 7px; border-radius:10px; border:1px solid #c9a84c44; background:none; color:#c9a84c88; cursor:pointer; margin-left:auto;">Wrong?</button>
+    <button onclick="newSession()" title="New scan" style="background:none; border:none; color:#c9a84c44; cursor:pointer; font-size:1rem; line-height:1; padding:0 2px;">✕</button>
   </div>
 
   <div class="chat" id="chat">
@@ -396,6 +397,14 @@ function newSession() {
   badge.className = 'badge';
 }
 
+// Clear only the exhibit identification — keeps history and image intact so
+// follow-up questions are no longer prefixed with the wrong exhibit name
+function wrongExhibit() {
+  currentExhibit = '';
+  badgeName.textContent = 'Not identified — try scanning again';
+  addMsg('ai', "No problem — I've cleared that. Try scanning the sculpture again for a fresh identification.");
+}
+
 // ── Voice input ───────────────────────────────────────────────────────────────
 let listeningBubble = null;
 
@@ -450,7 +459,7 @@ function toggleMic() {
     if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
     const msg = {
       'not-allowed':   'Microphone permission denied. Go to Settings → Safari → Microphone and allow this site.',
-      'audio-capture': 'Microphone not found or already in use.',
+      'audio-capture': 'Microphone temporarily unavailable — please try again.',
       'network':       'Network error — speech recognition needs an internet connection.',
       'no-speech':     null,
     }[e.error] ?? `Speech error: ${e.error}`;

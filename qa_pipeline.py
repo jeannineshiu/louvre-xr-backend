@@ -71,7 +71,7 @@ def run(
     if image_b64:
         frame = _b64_to_frame(image_b64)
         if frame is not None:
-            recognition = recognize_exhibit(frame)
+            recognition = recognize_exhibit(frame, detail="high")
             if (
                 "error" not in recognition
                 and recognition.get("confidence") == "high"
