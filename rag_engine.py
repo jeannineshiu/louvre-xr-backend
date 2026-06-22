@@ -150,6 +150,7 @@ def build_index() -> FAISS:
             "technique":          exhibit.get("technique", ""),
             "story":              exhibit.get("story", ""),
             "summary":            exhibit.get("content", ""),
+            "shop":               exhibit.get("shop", ""),
         }
         # Build one rich text block per exhibit
         text = (
@@ -162,7 +163,8 @@ def build_index() -> FAISS:
             f"Historical context: {sections['historical_context']}\n\n"
             f"Technique: {sections['technique']}\n\n"
             f"Story: {sections['story']}\n\n"
-            f"Summary: {sections['summary']}"
+            f"Summary: {sections['summary']}\n\n"
+            f"Shop & merchandise: {sections['shop']}"
         )
         docs.append(Document(
             page_content=text,

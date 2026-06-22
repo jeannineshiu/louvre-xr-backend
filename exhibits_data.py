@@ -73,6 +73,12 @@ EXHIBITS = [
             "headless, armless, and completely unforgettable. "
             "Rodin called her 'the most beautiful work the ancient world has left us.'"
         ),
+        "shop": (
+            "The Louvre boutique sells hand-patinated resin replicas of the Winged Victory in three sizes: "
+            "18 cm (€130), 34 cm, and 50 cm — each cast from a mould taken directly from the original marble. "
+            "Also available: art prints from €22, a Monnaie de Paris souvenir medal, and a chalcography engraving. "
+            "Browse the full collection at boutique.louvre.fr/en/products/400628-the-winged-victory-of-samothrace/"
+        ),
     },
     {
         "id": "venus_de_milo",
@@ -144,6 +150,14 @@ EXHIBITS = [
             "Both arms have been missing since her discovery, and their original position remains the subject "
             "of scholarly debate. France acquired her in 1821 and she has been a centrepiece of the Louvre ever since, "
             "becoming one of the most recognised works of art in human history."
+        ),
+        "shop": (
+            "The Louvre boutique offers an extensive Venus de Milo collection. "
+            "Resin replicas hand-patinated from the original mould are available in 16 cm, 30 cm, and 50 cm. "
+            "A bronze cast (32 × 9.5 × 8 cm) is also available. "
+            "For something more playful, the Pop Art versions in light blue or orange make striking decorative pieces. "
+            "Additional products include an art print (24 × 30 cm), a magnet, and an illustrated monograph (120 pages, 118 illustrations). "
+            "Browse the full collection at boutique.louvre.fr/en/products/400626-the-venus-de-milo/"
         ),
     },
     {
@@ -217,6 +231,13 @@ EXHIBITS = [
             "the spiralling composition reveals new emotion from every angle. "
             "It entered the Louvre in 1824 and is considered the supreme masterpiece of Neoclassical sculpture."
         ),
+        "shop": (
+            "The Louvre boutique sells a hand-patinated resin replica of Psyche Revived by Cupid's Kiss "
+            "(31 × 22 × 33 cm, €1,380) — one of the most prestigious pieces in the collection, "
+            "cast from a mould taken directly from the original Canova marble. "
+            "Also available: an art print (24 × 30 cm) and a decorative poster. "
+            "Browse the full collection at boutique.louvre.fr/en/product/14567-psyche-revived-by-cupid-kiss-antonio-canova.html"
+        ),
     },
     {
         "id": "borghese_gladiator",
@@ -288,6 +309,11 @@ EXHIBITS = [
             "sculptures in European art academies for centuries. "
             "Napoleon coerced its purchase from the Borghese family in 1807, "
             "and it has been in the Louvre ever since."
+        ),
+        "shop": (
+            "The Louvre boutique does not currently offer a dedicated replica of the Borghese Gladiator. "
+            "Art prints and posters of Greek antiquities from the Louvre collection are available from €22. "
+            "Visit boutique.louvre.fr or the on-site gift shop in the Louvre for the latest catalogue."
         ),
     },
     {
@@ -366,6 +392,12 @@ EXHIBITS = [
             "it entered the Louvre during the Revolution. "
             "It is one of the very few Michelangelo sculptures outside Italy."
         ),
+        "shop": (
+            "The Louvre boutique sells a hand-patinated resin replica of the Dying Slave (31 × 9 × 7 cm, €259), "
+            "produced using 3D scanning of the original marble for exceptional accuracy. "
+            "Art prints are also available from €22. "
+            "Browse at boutique.louvre.fr/en/product/18453-dying-slave-michelangelo-buonarroti.html"
+        ),
     },
     {
         "id": "the_crouching_scribe",
@@ -438,6 +470,13 @@ EXHIBITS = [
             "Found at Saqqara in 1850 by Auguste Mariette, his identity is completely unknown — "
             "he is one of the most famous anonymous people in human history. "
             "He is among the most recognised works of ancient Egyptian art in the world."
+        ),
+        "shop": (
+            "The Louvre boutique sells a hand-patinated resin replica of the Seated Scribe "
+            "(23.5 × 19.5 × 15 cm, €440), capturing the striking inlaid-eye detail of the original. "
+            "A small enamel pin is also available at €7.95 — a wearable tribute to one of history's "
+            "most famous anonymous faces. "
+            "Browse at boutique.louvre.fr/en/product/11940-seated-scribe.html"
         ),
     },
     {
@@ -515,6 +554,13 @@ EXHIBITS = [
             "these votive figures were dedicated by worshippers at temples across the Nile Delta. "
             "Bastet worship reached its peak during the Late Period, when her festival at Bubastis "
             "attracted hundreds of thousands of pilgrims — one of the largest religious gatherings in the ancient world."
+        ),
+        "shop": (
+            "The Louvre boutique offers several Bastet cat reproductions. "
+            "A hand-patinated resin replica of the Cat of the Goddess Bastet (16 × 7 × 9 cm) is available, "
+            "as well as a bronze cast version and a version with a decorative necklace collar. "
+            "An enamel pin of the Bastet cat is also available at €7.95. "
+            "Browse the full Egyptian collection at boutique.louvre.fr/en/products/400746-the-cat-bastet/"
         ),
     },
     {
@@ -597,6 +643,12 @@ EXHIBITS = [
             "She wrote All That Swagger here in 1936. "
             "The statue was reinstalled in 2023 after temporary removal for street works."
         ),
+        "shop": (
+            "The Miles Franklin Statue is a public artwork commissioned by Georges River Council. "
+            "There is no official merchandise store for this work. "
+            "For information about the Miles Franklin Literary Award and related publications, "
+            "visit the official award website at milesfranklin.com.au"
+        ),
     },
     {
         "id": "air_maillol",
@@ -674,6 +726,12 @@ EXHIBITS = [
             "Displayed in the Jardin des Tuileries on the Louvre estate, "
             "Air embodies Maillol's lifelong pursuit of Mediterranean serenity — "
             "a figure of absolute calm created on the eve of the Second World War."
+        ),
+        "shop": (
+            "Air by Maillol is displayed in the Jardin des Tuileries and is not sold by the Louvre boutique. "
+            "The Musée Maillol in Paris (61 rue de Grenelle, 7th arrondissement) has a dedicated gift shop "
+            "with Maillol-related publications, prints, and objects. "
+            "Art prints of works from the Tuileries garden sculpture collection may also be available at boutique.louvre.fr"
         ),
     },
 ]
