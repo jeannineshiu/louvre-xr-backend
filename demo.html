@@ -364,7 +364,7 @@ camInput.addEventListener('change', async () => {
   badgeName.textContent = 'Identifying…';
   badge.className = 'badge on';
 
-  await callAPI('Please identify and introduce the sculpture I am looking at.', true);
+  await callAPI('State only the name, artist, approximate date, and country of origin of this sculpture. Nothing else.', true);
   camInput.value = '';
 });
 
@@ -557,7 +557,7 @@ async function callAPI(question, isIntro) {
     ? `[Regarding: ${currentExhibit}] ${question}`
     : question;
 
-  const body = { question: apiQuestion, mode: isIntro ? 'BRIEF_TEXT' : 'FULL_VOICE' };
+  const body = { question: apiQuestion, mode: isIntro ? 'GLANCE_CARD' : 'FULL_VOICE' };
   if (history.length)          body.history      = history;
   if (isIntro && imageB64)     body.image_base64  = imageB64;
 
@@ -581,7 +581,7 @@ async function callAPI(question, isIntro) {
     if (answer) {
       addMsg('ai', answer);
       speak(answer);
-      const storedQ = isIntro ? 'Please introduce this sculpture.' : question;
+      const storedQ = isIntro ? 'What is this sculpture?' : question;
       history.push({ role: 'user',      content: storedQ });
       history.push({ role: 'assistant', content: answer });
     }
