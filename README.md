@@ -44,12 +44,13 @@ louvre-ar-backend/
 ├── context_router.py       # Decides response mode from gaze_duration + crowd + noise
 ├── rag_engine.py           # RAG: FAISS vector store + GPT-4o, mode-specific prompts
 ├── exhibit_recognizer.py   # GPT-4o Vision: identify sculpture from camera frame
-├── exhibits_data.py        # Museum knowledge base (9 sculptures, 5 sections each)
+├── exhibits_data.py        # Museum knowledge base (9 sculptures, 6 sections each)
 │
 ├── faiss_index/            # Pre-built FAISS vector index (committed — no rebuild needed)
 │   ├── index.faiss
 │   └── index.pkl
 │
+├── demo.html               # Browser demo — voice chat UI served at GET /demo
 ├── Dockerfile              # Container image for the FastAPI server
 ├── requirements.txt
 └── .env.example            # API key template — copy to .env and fill in
@@ -71,7 +72,7 @@ louvre-ar-backend/
 | Air | Aristide Maillol | 1938 | Jardin des Tuileries |
 | Miles Franklin Statue | Jacek Luszczyk | 2003 | MacMahon Street, Hurstville, Sydney |
 
-Each sculpture has five structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`.
+Each sculpture has six structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`, `shop`.
 
 ---
 
@@ -105,6 +106,72 @@ uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 
 Server: `http://localhost:8000`
 Interactive docs: `http://localhost:8000/docs`
+Browser demo: `http://localhost:8000/demo`
+
+---
+
+## Demo Web App (`demo.html`)
+
+A single-page voice chat interface served directly by the FastAPI backend. Designed as a demo fallback when the Meta Quest 3 is unavailable — no app install required.
+
+### Access
+
+```
+GET <BASE_URL>/demo
+```
+
+Open this URL in a phone browser to use the full voice interface.
+
+### Features
+
+| Feature | Description |
+|---|---|
+| 📷 Sculpture scan | Tap the scan button to capture a photo with the phone camera. GPT-4o Vision identifies the sculpture and gives a brief intro (name, artist, date, country). |
+| 🎤 Voice input | Tap the microphone to ask a question by voice. The transcript appears in the chat in real time as you speak. |
+| 🔊 AI voice output | The AI answer is read aloud automatically via text-to-speech. Tap ⏹ to stop. |
+| 💬 Text input | Type a question as a fallback when voice is unavailable. |
+| 🔄 Multi-turn conversation | Full conversation history is maintained per sculpture session. Follow-up questions like "What technique did he use?" resolve correctly. |
+| 🏛 Exhibit badge | Shows the identified sculpture name. Tap **Wrong?** to clear a misidentification without resetting the conversation. Tap **✕** for a full session reset. |
+| 🛍 Shop info | Ask "Where can I buy a souvenir?" or "Is there a replica?" to surface real Louvre boutique products with prices and links. |
+
+### Conversation flow
+
+```
+1. Tap 📷 → photograph the sculpture
+2. AI identifies it and gives a one-line intro (name / artist / date / country)
+3. Tap 🎤 or type to ask anything about the sculpture
+4. AI answers with full detail (~150 words) and reads it aloud
+5. Continue asking follow-up questions — the AI remembers context
+6. Tap ✕ to start fresh with a new sculpture
+```
+
+### Response modes
+
+| Trigger | Mode | Target length |
+|---|---|---|
+| First scan (intro) | `GLANCE_CARD` | ~20 words — name, artist, date, country only |
+| Follow-up questions | `FULL_VOICE` | ~150 words — full immersive answer |
+
+### Browser support
+
+| Device | Browser | Voice input | Camera | TTS |
+|---|---|---|---|---|
+| iPhone | **Safari** | ✅ | ✅ | ✅ |
+| iPhone | Chrome | ❌ | ✅ | ✅ |
+| Android | **Chrome** | ✅ | ✅ | ✅ |
+| Desktop | Chrome / Edge | ✅ | ✅ (webcam) | ✅ |
+
+> **Note:** Voice input requires HTTPS. The Railway deployment is always HTTPS. For local development, use `http://localhost:8000/demo` (localhost is exempt from the HTTPS requirement).
+
+### Sculpture recognition behaviour
+
+- Recognition only triggers when a photo is included in the request.
+- GPT-4o Vision requires **all** listed visual markers to be clearly visible before returning a sculpture name. Ambiguous or non-listed sculptures return `"unknown"`.
+- If the sculpture is not identified, the AI responds: *"I wasn't able to identify this sculpture as one of the nine works in my system"* and lists the available works — it does **not** guess.
+
+### Shop & merchandise
+
+When a visitor asks about buying (e.g. *"Where can I buy this?"*, *"Is there a replica?"*, *"Any souvenirs?"*), the RAG retrieves the `shop` section from the knowledge base and surfaces real products from the [Louvre boutique](https://boutique.louvre.fr) with prices and direct URLs. Shop information is **only** surfaced on purchase-related questions — it does not appear in general answers.
 
 ---
 
@@ -351,11 +418,19 @@ This pattern aligns perfectly with the context router: gaze under 5 seconds retu
 
 ### If the image is unclear or not one of the nine sculptures
 
-The recognizer returns `confidence: "low"` or `name: "unknown"`. In that case, the server falls back to answering the question from the general knowledge base without sculpture-specific context.
+GPT-4o Vision returns `confidence: "low"` or `name: "unknown"`. The server then returns an explicit message to the visitor:
+
+> *"I wasn't able to identify this sculpture as one of the nine works in my system. I can tell you about: the Winged Victory of Samothrace, Venus de Milo, …"*
+
+The server does **not** guess or fall back to a random sculpture — it tells the visitor exactly which works it covers and asks them to try scanning again.
 
 ---
 
 ## API Reference
+
+### `GET /demo`
+
+Returns the browser demo page (`demo.html`). Open in a phone browser for the full voice chat interface.
 
 ### `GET /health`
 
