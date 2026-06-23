@@ -73,6 +73,13 @@ EXHIBITS = [
             "headless, armless, and completely unforgettable. "
             "Rodin called her 'the most beautiful work the ancient world has left us.'"
         ),
+        "navigation": (
+            "Location: Room 703, Denon wing, Level 1 — at the top of the Daru Staircase. "
+            "From the main Pyramid entrance, follow signs for Denon wing, climb the Daru Staircase to Level 1. "
+            "To reach Venus de Milo (Room 345): descend the Daru Staircase to Level 0, "
+            "then follow signs for Greek Antiquities into the Sully wing — Venus de Milo is at the end of the Galerie des Antiques corridor, about a 5-minute walk. "
+            "To reach Cupid and Psyche / Dying Slave (Room 403): descend to Level 0 and stay in the Denon wing — Room 403 (the Michelangelo Gallery) is a 3-minute walk south along the ground floor."
+        ),
         "shop": (
             "The Louvre boutique sells hand-patinated resin replicas of the Winged Victory in three sizes: "
             "18 cm (€130), 34 cm, and 50 cm — each cast from a mould taken directly from the original marble. "
@@ -87,7 +94,7 @@ EXHIBITS = [
         "year": "c. 130–100 BC",
         "type": "sculpture",
         "period": "Hellenistic Greece, c. 130–100 BC",
-        "location": "Louvre, Salle 346 (Galerie de Milo)",
+        "location": "Louvre, Salle 345 (Galerie de Milo)",
         "key_facts": (
             "Marble, height 203 cm (80 in). "
             "Created c. 130–100 BC, attributed to Alexandros of Antioch based on an inscription found nearby. "
@@ -151,6 +158,14 @@ EXHIBITS = [
             "of scholarly debate. France acquired her in 1821 and she has been a centrepiece of the Louvre ever since, "
             "becoming one of the most recognised works of art in human history."
         ),
+        "navigation": (
+            "Location: Room 345, Sully wing, Level 0 — Galerie des Antiques. "
+            "From the main Pyramid entrance, follow signs for Sully wing ground floor, then Greek Antiquities. "
+            "To reach Winged Victory (Room 703): walk east through the Greek Antiquities corridor into the Denon wing, then climb the Daru Staircase to Level 1 — about 5 minutes. "
+            "To reach Cupid and Psyche / Dying Slave (Room 403): exit Room 345, head east through the Greek Antiquities corridor back into the Denon wing — Room 403 (the Michelangelo Gallery) is on Level 0, about a 5-minute walk. "
+            "To reach The Borghese Gladiator (Room 348): it is just a few rooms along the same Level 0 Sully corridor, a 2-minute walk. "
+            "To reach the Seated Scribe (Room 635): head north through the Sully wing and take the stairs to Level 1, then follow signs for Egyptian Antiquities — about 8 minutes."
+        ),
         "shop": (
             "The Louvre boutique offers an extensive Venus de Milo collection. "
             "Resin replicas hand-patinated from the original mould are available in 16 cm, 30 cm, and 50 cm. "
@@ -167,7 +182,7 @@ EXHIBITS = [
         "year": "1793",
         "type": "sculpture",
         "period": "Neoclassicism, 1793",
-        "location": "Louvre, Salle 403 (Richelieu Wing)",
+        "location": "Louvre, Salle 403 (Denon Wing — Michelangelo Gallery)",
         "key_facts": (
             "Marble, height 155 cm (61 in). "
             "Carved 1787–93 by Antonio Canova. "
@@ -230,6 +245,14 @@ EXHIBITS = [
             "Carved from white Carrara marble and polished to a skin-like smoothness, "
             "the spiralling composition reveals new emotion from every angle. "
             "It entered the Louvre in 1824 and is considered the supreme masterpiece of Neoclassical sculpture."
+        ),
+        "navigation": (
+            "Location: Room 403, Denon wing, Level 0 — the Michelangelo Gallery. "
+            "Both Cupid and Psyche (Canova) and The Dying Slave (Michelangelo) are displayed in this same room. "
+            "From the main Pyramid entrance, follow signs for Denon wing and proceed along the ground floor — Room 403 is a large, well-lit gallery about halfway down. "
+            "To reach Venus de Milo (Room 345): head west from Room 403 into the Sully wing, following signs for Greek Antiquities — about 5 minutes on Level 0. "
+            "To reach Winged Victory (Room 703): from Room 403, head north toward the Daru Staircase and climb to Level 1 — about 5 minutes. "
+            "To reach the Seated Scribe (Room 635): head west into the Sully wing, find stairs to Level 1, then follow signs for Egyptian Antiquities — about 10 minutes."
         ),
         "shop": (
             "The Louvre boutique sells a hand-patinated resin replica of Psyche Revived by Cupid's Kiss "
@@ -310,6 +333,13 @@ EXHIBITS = [
             "Napoleon coerced its purchase from the Borghese family in 1807, "
             "and it has been in the Louvre ever since."
         ),
+        "navigation": (
+            "Location: Room 348, Sully wing, Level 0 — Greek Antiquities. "
+            "From the main Pyramid entrance, follow signs for Sully wing ground floor, then Greek Antiquities. "
+            "To reach Venus de Milo (Room 345): it is just a few rooms along the same corridor — a 2-minute walk. "
+            "To reach Cupid and Psyche / Dying Slave (Room 403): head east into the Denon wing ground floor — Room 403 (the Michelangelo Gallery) is about 5 minutes away. "
+            "To reach Winged Victory (Room 703): from the Denon wing, climb the Daru Staircase to Level 1 — about 8 minutes total."
+        ),
         "shop": (
             "The Louvre boutique does not currently offer a dedicated replica of the Borghese Gladiator. "
             "Art prints and posters of Greek antiquities from the Louvre collection are available from €22. "
@@ -323,7 +353,7 @@ EXHIBITS = [
         "year": "1513–16",
         "type": "sculpture",
         "period": "Italian Renaissance / High Renaissance, 1513–16",
-        "location": "Louvre, Salle 403 (Richelieu Wing)",
+        "location": "Louvre, Salle 403 (Denon Wing — Michelangelo Gallery)",
         "key_facts": (
             "Marble, height 229 cm (90 in). "
             "Carved 1513–16 by Michelangelo as part of the never-completed Tomb of Pope Julius II. "
@@ -391,6 +421,14 @@ EXHIBITS = [
             "Given by Michelangelo to a Florentine exile and eventually presented to Francis I of France, "
             "it entered the Louvre during the Revolution. "
             "It is one of the very few Michelangelo sculptures outside Italy."
+        ),
+        "navigation": (
+            "Location: Room 403, Denon wing, Level 0 — the Michelangelo Gallery. "
+            "The Dying Slave is displayed alongside Cupid and Psyche by Canova in the same room. "
+            "From the main Pyramid entrance, follow signs for Denon wing ground floor — Room 403 is a large gallery about halfway down. "
+            "To reach Venus de Milo (Room 345): head west from Room 403 into the Sully wing ground floor, following signs for Greek Antiquities — about 5 minutes. "
+            "To reach Winged Victory (Room 703): head north toward the Daru Staircase and climb to Level 1 — about 5 minutes. "
+            "To reach the Seated Scribe (Room 635): head west into Sully, take stairs to Level 1, then follow signs for Egyptian Antiquities — about 10 minutes."
         ),
         "shop": (
             "The Louvre boutique sells a hand-patinated resin replica of the Dying Slave (31 × 9 × 7 cm, €259), "
@@ -470,6 +508,13 @@ EXHIBITS = [
             "Found at Saqqara in 1850 by Auguste Mariette, his identity is completely unknown — "
             "he is one of the most famous anonymous people in human history. "
             "He is among the most recognised works of ancient Egyptian art in the world."
+        ),
+        "navigation": (
+            "Location: Room 635, Sully wing, Level 1 — Egyptian Antiquities. "
+            "From the main Pyramid entrance, follow signs for Sully wing, take the stairs to Level 1, then follow signs for Egyptian Antiquities. "
+            "To reach Bastet Cat Statue (Room 630): it is just a few rooms south in the same Egyptian Antiquities corridor — a 2-minute walk. "
+            "To reach Venus de Milo (Room 345): descend to Level 0 and head south through the Sully wing toward Greek Antiquities — about 8 minutes. "
+            "To reach Cupid and Psyche / Dying Slave (Room 403): descend to Level 0, cross into the Denon wing — about 10 minutes."
         ),
         "shop": (
             "The Louvre boutique sells a hand-patinated resin replica of the Seated Scribe "
@@ -554,6 +599,13 @@ EXHIBITS = [
             "these votive figures were dedicated by worshippers at temples across the Nile Delta. "
             "Bastet worship reached its peak during the Late Period, when her festival at Bubastis "
             "attracted hundreds of thousands of pilgrims — one of the largest religious gatherings in the ancient world."
+        ),
+        "navigation": (
+            "Location: Room 630, Sully wing, Level 1 — Egyptian Antiquities. "
+            "From the main Pyramid entrance, follow signs for Sully wing, take the stairs to Level 1, then follow signs for Egyptian Antiquities. "
+            "To reach The Seated Scribe (Room 635): it is just a few rooms north in the same Egyptian Antiquities corridor — a 2-minute walk. "
+            "To reach Venus de Milo (Room 345): descend to Level 0 and head south through Sully toward Greek Antiquities — about 8 minutes. "
+            "To reach Cupid and Psyche / Dying Slave (Room 403): descend to Level 0, cross east into the Denon wing — about 10 minutes."
         ),
         "shop": (
             "The Louvre boutique offers several Bastet cat reproductions. "

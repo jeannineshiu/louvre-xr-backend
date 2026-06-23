@@ -63,10 +63,10 @@ louvre-ar-backend/
 | Sculpture | Artist | Date | Location |
 |---|---|---|---|
 | Winged Victory of Samothrace | Unknown (Rhodian school) | c. 190 BC | Salle 703, Daru Staircase |
-| Venus de Milo | Attr. Alexandros of Antioch | c. 130–100 BC | Salle 346 |
-| Cupid and Psyche | Antonio Canova | 1793 | Salle 403, Richelieu Wing |
+| Venus de Milo | Attr. Alexandros of Antioch | c. 130–100 BC | Salle 345 |
+| Cupid and Psyche | Antonio Canova | 1793 | Salle 403, Denon Wing (Michelangelo Gallery) |
 | The Borghese Gladiator | Agasias of Ephesus | c. 100 BC | Salle 348 |
-| The Dying Slave | Michelangelo | 1513–16 | Salle 403, Richelieu Wing |
+| The Dying Slave | Michelangelo | 1513–16 | Salle 403, Denon Wing (Michelangelo Gallery) |
 | The Seated Scribe | Unknown (Egyptian Old Kingdom) | c. 2620–2500 BC | Salle 635, Egyptian Antiquities |
 | Bastet Cat Statue | Unknown (Egyptian Late Period) | c. 664–332 BC | Salle 630, Egyptian Antiquities |
 | Air | Aristide Maillol | 1938 | Jardin des Tuileries |
