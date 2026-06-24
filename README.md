@@ -92,7 +92,7 @@ Four additional works are included in the knowledge base to support field testin
 | L'Hommage à Cézanne | Aristide Maillol | 1912 | Jardin des Tuileries (Carrousel Garden), Paris |
 | Miles Franklin Statue | Jacek Luszczyk | 2003 | MacMahon Street, Hurstville, Sydney |
 
-These exhibits support text and voice Q&A. They are not included in the GPT-4o Vision recogniser prompt.
+These exhibits support the full feature set: text and voice Q&A, image recognition via GPT-4o Vision, and shop information where available. They do not have navigation data (no walking directions between them and the main Louvre exhibits).
 
 ---
 
