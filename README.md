@@ -44,7 +44,7 @@ louvre-ar-backend/
 ├── context_router.py       # Decides response mode from gaze_duration + crowd + noise
 ├── rag_engine.py           # RAG: FAISS vector store + GPT-4o, mode-specific prompts
 ├── exhibit_recognizer.py   # GPT-4o Vision: identify sculpture from camera frame
-├── exhibits_data.py        # Museum knowledge base (9 sculptures, 6 sections each)
+├── exhibits_data.py        # Museum knowledge base (12 sculptures: 8 main + 4 testing, 7 sections each)
 │
 ├── faiss_index/            # Pre-built FAISS vector index (committed — no rebuild needed)
 │   ├── index.faiss
@@ -75,8 +75,9 @@ Eight sculptures displayed inside the Louvre museum building, spanning antiquity
 | Bastet Cat Statue | Unknown (Egyptian Late Period) | c. 664–332 BC | Salle 630, Sully — Egyptian Antiquities, Level 1 |
 | La Siesta | Denis Foyatier | 1848 | Salle 225, Richelieu — Modern Sculpture, Level 0 |
 
-Each main exhibit has six structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`, `shop`.
-The seven indoor Louvre sculptures also include a `navigation` section with step-by-step walking directions between exhibits.
+Each main exhibit has seven structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`, `shop`, `navigation`.
+
+The `navigation` section provides step-by-step walking directions from each exhibit to every other main exhibit — covering all 56 directional routes across the three wings and two floors of the Louvre. Visitors can ask questions like *"How do I get to the Seated Scribe from here?"* and receive specific directions with room numbers, wing names, and estimated walking times.
 
 ---
 
@@ -152,6 +153,7 @@ Open this URL in a phone browser to use the full voice interface.
 | 🔄 Multi-turn conversation | Full conversation history is maintained per sculpture session. Follow-up questions like "What technique did he use?" resolve correctly. |
 | 🏛 Exhibit badge | Shows the identified sculpture name. Tap **Wrong?** to clear a misidentification without resetting the conversation. Tap **✕** for a full session reset. |
 | 🛍 Shop info | Ask "Where can I buy a souvenir?" or "Is there a replica?" to surface real Louvre boutique products with prices and links. |
+| 🗺 Navigation | Ask "How do I get to the Venus de Milo?" or "Where is the Seated Scribe from here?" to get step-by-step walking directions with room numbers and estimated times. Covers all routes between the 8 main Louvre exhibits. |
 
 ### Conversation flow
 
