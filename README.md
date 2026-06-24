@@ -1,7 +1,7 @@
 # Louvre XR Backend
 
 FastAPI backend for an XR museum companion system.
-Exhibition: **Louvre Museum & Jardin des Tuileries, Paris** — nine sculptures from antiquity to the 20th century, including one additional public artwork in Sydney, Australia.
+Core exhibition: **Louvre Museum, Paris** — eight sculptures spanning antiquity to the 19th century. Knowledge base also includes four additional works in the Jardin des Tuileries and Sydney for testing purposes.
 
 > **Access:** This server is deployed on Railway. Contact a team member for the public URL — it is not published here to limit access to the team.
 
@@ -58,21 +58,40 @@ louvre-ar-backend/
 
 ---
 
-## The Nine Sculptures
+## Knowledge Base
+
+### Louvre Museum — Main Exhibits
+
+Eight sculptures displayed inside the Louvre museum building, spanning antiquity to the 19th century. These are the primary works of the XR experience, with full knowledge sections, navigation data, and Louvre boutique shop information.
 
 | Sculpture | Artist | Date | Location |
 |---|---|---|---|
-| Winged Victory of Samothrace | Unknown (Rhodian school) | c. 190 BC | Salle 703, Daru Staircase |
-| Venus de Milo | Attr. Alexandros of Antioch | c. 130–100 BC | Salle 345 |
-| Cupid and Psyche | Antonio Canova | 1793 | Salle 403, Denon Wing (Michelangelo Gallery) |
-| The Borghese Gladiator | Agasias of Ephesus | c. 100 BC | Salle 348 |
-| The Dying Slave | Michelangelo | 1513–16 | Salle 403, Denon Wing (Michelangelo Gallery) |
-| The Seated Scribe | Unknown (Egyptian Old Kingdom) | c. 2620–2500 BC | Salle 635, Egyptian Antiquities |
-| Bastet Cat Statue | Unknown (Egyptian Late Period) | c. 664–332 BC | Salle 630, Egyptian Antiquities |
-| Air | Aristide Maillol | 1938 | Jardin des Tuileries |
+| Winged Victory of Samothrace | Unknown (Rhodian school) | c. 190 BC | Salle 703, Denon — Daru Staircase, Level 1 |
+| Venus de Milo | Attr. Alexandros of Antioch | c. 130–100 BC | Salle 345, Sully — Galerie de Milo, Level 0 |
+| Cupid and Psyche | Antonio Canova | 1793 | Salle 403, Denon — Michelangelo Gallery, Level 0 |
+| The Borghese Gladiator | Agasias of Ephesus | c. 100 BC | Salle 348, Sully — Greek Antiquities, Level 0 |
+| The Dying Slave | Michelangelo | 1513–16 | Salle 403, Denon — Michelangelo Gallery, Level 0 |
+| The Seated Scribe | Unknown (Egyptian Old Kingdom) | c. 2620–2500 BC | Salle 635, Sully — Egyptian Antiquities, Level 1 |
+| Bastet Cat Statue | Unknown (Egyptian Late Period) | c. 664–332 BC | Salle 630, Sully — Egyptian Antiquities, Level 1 |
+| La Siesta | Denis Foyatier | 1848 | Salle 225, Richelieu — Modern Sculpture, Level 0 |
+
+Each main exhibit has six structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`, `shop`.
+The seven indoor Louvre sculptures also include a `navigation` section with step-by-step walking directions between exhibits.
+
+---
+
+### Additional Exhibits — For Testing Purposes
+
+Four additional works are included in the knowledge base to support field testing and extended demos. These are **not part of the core Louvre XR experience** and do not appear in the unrecognised-sculpture response.
+
+| Sculpture | Artist | Date | Location |
+|---|---|---|---|
+| Air | Aristide Maillol | 1938 | Jardin des Tuileries, Paris |
+| La Nuit (Night) | Aristide Maillol | 1902–1909 | Jardin des Tuileries, Paris |
+| L'Hommage à Cézanne | Aristide Maillol | 1912 | Jardin des Tuileries (Carrousel Garden), Paris |
 | Miles Franklin Statue | Jacek Luszczyk | 2003 | MacMahon Street, Hurstville, Sydney |
 
-Each sculpture has six structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`, `shop`.
+These exhibits support text and voice Q&A. They are not included in the GPT-4o Vision recogniser prompt.
 
 ---
 
@@ -416,7 +435,7 @@ GPT-4o Vision takes 1–3 seconds per call, which makes continuous streaming imp
 
 This pattern aligns perfectly with the context router: gaze under 5 seconds returns `NO_RESPONSE` anyway, so recognition only fires at the exact moment the visitor is worth addressing.
 
-### If the image is unclear or not one of the nine sculptures
+### If the image is unclear or not one of the recognised sculptures
 
 GPT-4o Vision returns `confidence: "low"` or `name: "unknown"`. The server then returns an explicit message to the visitor:
 
