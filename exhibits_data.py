@@ -786,4 +786,211 @@ EXHIBITS = [
             "Art prints of works from the Tuileries garden sculpture collection may also be available at boutique.louvre.fr"
         ),
     },
+    {
+        "id": "la_nuit_maillol",
+        "name": "La Nuit (Night)",
+        "artist": "Aristide Maillol",
+        "year": "1902–1909",
+        "type": "sculpture",
+        "period": "Modern / Post-Art Nouveau, 1902–1909",
+        "location": "Jardin des Tuileries (Carrousel Garden), Paris — installed 1964",
+        "key_facts": (
+            "Bronze, H: 110 cm, W: 78 cm, D: 116 cm. "
+            "Modelled between 1902 and 1909 by Aristide Maillol; the bronze cast installed in the Tuileries in 1964. "
+            "Depicts a seated female nude with bent legs, arms resting on her knees, head bowed and buried in her forearms — as if asleep. "
+            "Part of the open-air collection of Maillol's works established in the Tuileries by Dina Vierny and André Malraux in 1964. "
+            "Other casts exist at the Metropolitan Museum of Art, New York."
+        ),
+        "visual_description": (
+            "A compact, self-contained female figure sits on the ground with her knees drawn up to her chest. "
+            "Her arms are folded protectively over her knees, and her head is bowed forward, resting on her forearms — "
+            "completely hidden, turned inward, withdrawn from the world. "
+            "The pose is one of absolute enclosure: no face is visible, no limb extends outward. "
+            "The bronze surface carries a warm dark patina from decades of outdoor exposure. "
+            "Unlike Maillol's more expansive reclining figures, La Nuit is dense and concentrated, "
+            "a sphere of weight and sleep compressed into itself. "
+            "Seen in the Tuileries garden, the figure appears both monumental and deeply private."
+        ),
+        "historical_context": (
+            "Aristide Maillol (1861–1944) made female nudes almost exclusively, "
+            "exploring the elemental and sensuous qualities of the human body without literary or symbolic ornamentation. "
+            "La Nuit was modelled over seven years between 1902 and 1909, "
+            "a period when Maillol was moving away from the turbulent expressionism of Rodin "
+            "toward a quieter, more archaic monumentality. "
+            "The Tuileries bronze was cast and installed in 1964 as part of a major public initiative "
+            "led by Dina Vierny — Maillol's model and lifelong champion — and André Malraux, "
+            "then France's Minister of Cultural Affairs, to create an open-air Maillol museum in Paris. "
+            "The collection of eighteen works placed throughout the Tuileries and Carrousel gardens "
+            "transformed the formal French garden into one of the world's great outdoor sculpture parks."
+        ),
+        "technique": (
+            "Maillol modelled La Nuit in clay, working directly from the figure over many sessions. "
+            "He preferred slow, deliberate modelling — returning repeatedly to adjust the volumes "
+            "until the mass achieved the stillness and balance he sought. "
+            "The compactness of the pose presented no structural challenges (unlike his horizontal figures), "
+            "allowing the weight to rest entirely through the seated base. "
+            "The bronze was cast using the lost-wax process and finished with a dark patina "
+            "suited to outdoor display. "
+            "Maillol's approach — smooth, simplified surfaces, resolving every plane into calm — "
+            "contrasts sharply with Rodin's rough, process-revealing surfaces and is fully expressed here."
+        ),
+        "story": (
+            "La Nuit belongs to a group of Maillol's elemental works named after natural forces and states of being — "
+            "alongside Air, L'Hommage à Cézanne, and others — each embodying a quality rather than a narrative. "
+            "Where Air floats horizontally in surrender, La Nuit curls inward in protective sleep. "
+            "Dina Vierny, who posed for Maillol from the age of fifteen and managed his estate after his death in 1944, "
+            "worked with André Malraux to secure the permanent placement of Maillol's bronzes in the Tuileries. "
+            "The collection she assembled there remains the largest concentration of Maillol's outdoor work in the world. "
+            "A cast of La Nuit is also held at the Metropolitan Museum of Art in New York, "
+            "where it is one of the most quietly powerful works in the collection."
+        ),
+        "content": (
+            "La Nuit (Night) is a bronze sculpture by Aristide Maillol, modelled between 1902 and 1909 "
+            "and installed in the Jardin des Tuileries in 1964. "
+            "A seated female nude with her head buried in her folded arms, the work embodies enclosure, "
+            "sleep, and inward withdrawal — the opposite of Maillol's floating Air nearby. "
+            "Part of the open-air collection established by Dina Vierny and André Malraux, "
+            "it stands in the Carrousel garden as one of the finest examples of Maillol's monumental, meditative style."
+        ),
+    },
+    {
+        "id": "hommage_a_cezanne_maillol",
+        "name": "L'Hommage à Cézanne",
+        "artist": "Aristide Maillol",
+        "year": "1912",
+        "type": "sculpture",
+        "period": "Modern / Post-Art Nouveau, 1912",
+        "location": "Jardin des Tuileries (Carrousel Garden), Paris — lead cast installed 1964",
+        "key_facts": (
+            "Lead cast, Carrousel Garden, Tuileries, Paris. Original stone version at Musée d'Orsay, Paris. "
+            "Created 1912 by Aristide Maillol; Tuileries lead cast installed 1964. "
+            "Commissioned by the city of Aix-en-Provence to honour Paul Cézanne — the commission was rejected by the city, "
+            "and the work eventually found its way to Paris. "
+            "Depicts a semi-reclining nude female figure with her left arm resting on her slightly raised left knee."
+        ),
+        "visual_description": (
+            "A nude woman reclines in a semi-horizontal pose — her upper body slightly raised, "
+            "her left arm resting on her bent left knee, her legs extending in a long, relaxed diagonal. "
+            "The body is full and rounded in Maillol's characteristic Mediterranean ideal, "
+            "every surface resolved into a calm, unhurried plane. "
+            "The lead surface has the dark, matte quality of old pewter, absorbing rather than reflecting light "
+            "and giving the figure a quiet, earthbound presence even in its reclining repose. "
+            "Seen in the Carrousel garden, the figure lies low against the formal hedges and gravel, "
+            "a horizontal counterpoint to the vertical cypress and the movement of visitors above."
+        ),
+        "historical_context": (
+            "Paul Cézanne (1839–1906), the Post-Impressionist painter, died in 1906 and was immediately recognised "
+            "as one of the foundational figures of modern art. "
+            "The city of Aix-en-Provence — Cézanne's birthplace — commissioned Maillol in 1912 to create a monument in his honour. "
+            "Maillol proposed not a portrait or a narrative scene but an abstract female nude, "
+            "in keeping with his belief that sculpture should embody elemental qualities rather than commemorate individuals. "
+            "Aix-en-Provence rejected the work, finding it too abstract for a public memorial. "
+            "The advocate Frantz Jourdain championed the sculpture and helped bring it to Paris. "
+            "The original stone version entered the Musée d'Orsay's collection. "
+            "The lead cast now in the Tuileries was placed there in 1964 by Dina Vierny and André Malraux "
+            "as part of the open-air Maillol collection."
+        ),
+        "technique": (
+            "Maillol modelled the work in clay from the live figure, then had it cast in stone for the original version "
+            "and in lead for the Tuileries edition. "
+            "Lead was chosen for the outdoor casts — as with Air — for its density, durability, and dark matte surface, "
+            "which Maillol and Vierny felt suited the meditative, earthbound quality of his figures. "
+            "The semi-reclining pose demanded careful attention to the distribution of mass: "
+            "Maillol resolved the composition so that the raised knee creates a stabilising diagonal "
+            "that anchors the figure visually without making it appear rigid. "
+            "The smooth, simplified surfaces are characteristic of his mature technique."
+        ),
+        "story": (
+            "The rejection by Aix-en-Provence is one of the notable ironies of 20th-century French art: "
+            "a city commissioning a monument to its most celebrated son, then refusing the result because it was too modern. "
+            "Maillol's decision to honour Cézanne not with a portrait but with a generic female nude "
+            "reflected his deep conviction that great art transcends biography — "
+            "a view that Cézanne himself would likely have endorsed. "
+            "The stone original now in the Musée d'Orsay is considered one of Maillol's finest early works. "
+            "The Tuileries lead cast, placed there by Dina Vierny in 1964, "
+            "stands among eighteen Maillol bronzes that transformed the formal French garden "
+            "into an open-air museum — the largest concentration of Maillol's outdoor sculpture in the world."
+        ),
+        "content": (
+            "L'Hommage à Cézanne is a sculpture by Aristide Maillol, created in 1912 as a public monument "
+            "to honour the Post-Impressionist painter Paul Cézanne. "
+            "Commissioned by Aix-en-Provence and rejected for being too abstract, "
+            "the work depicts a semi-reclining nude female figure — Maillol's characteristic form for embodying elemental qualities. "
+            "The original stone version is at the Musée d'Orsay; the lead cast installed in the Carrousel garden "
+            "of the Tuileries in 1964 is part of the open-air Maillol collection assembled by Dina Vierny and André Malraux."
+        ),
+    },
+    {
+        "id": "la_siesta_foyatier",
+        "name": "La Siesta",
+        "artist": "Denis Foyatier",
+        "year": "1848",
+        "type": "sculpture",
+        "period": "French Neoclassicism, 19th century",
+        "location": "Louvre, Salle 225, Richelieu wing, Level 0 — Department of Medieval, Renaissance and Modern Sculpture",
+        "key_facts": (
+            "Marble, H: 76 cm, W: 154.5 cm, D: 59 cm. "
+            "Signed 'Foyatier 1848' on the pillow. "
+            "Created by Denis Foyatier (1793–1863), one of the major French Neoclassical sculptors of the 19th century. "
+            "This is a replica of the marble exhibited at the Salon of 1834 and later shown at the Universal Expositions of 1855 and 1889. "
+            "Entered the Louvre in 1897 as a donation from General Denis-François-Félix Deloye on behalf of the sculptor's daughters. "
+            "Displayed in Salle 225, Richelieu wing, Level 0."
+        ),
+        "visual_description": (
+            "A reclining female figure lies on her side in a state of complete, relaxed sleep — the siesta of the title. "
+            "Her body is draped in soft fabric that clings to and pools around her form, "
+            "her head resting on a pillow (on which the sculptor's signature is carved). "
+            "The pose is one of absolute repose: limbs loose, expression peaceful, every muscle surrendered to rest. "
+            "The marble surface is polished to a smooth, skin-like finish on the figure "
+            "while the drapery and pillow are rendered with virtuoso textile detail. "
+            "At 154.5 cm wide, the sculpture has the horizontal scale of a reclining figure seen life-size. "
+            "The composition is self-contained and tranquil — a rare moment of everyday rest elevated to monument."
+        ),
+        "historical_context": (
+            "Denis Foyatier (1793–1863) was one of the prominent French Neoclassical sculptors of the early 19th century, "
+            "best known for his monumental works including Spartacus (1830) and various royal commissions. "
+            "La Siesta was first exhibited at the Salon of 1834, where the reclining figure's naturalism "
+            "and intimate subject matter — sleep, rest, the domestic moment — attracted attention. "
+            "Foyatier subsequently created the 1848 marble now in the Louvre, "
+            "which was shown at the Universal Expositions of 1855 and 1889, bringing it to international audiences. "
+            "The Louvre classifies it in its Department of Medieval, Renaissance and Modern Sculpture, "
+            "reflecting its place within the long French tradition of monumental marble carving. "
+            "The work entered the collection in 1897 through the generosity of General Deloye, "
+            "acting on behalf of the sculptor's daughters — a final act of filial care for a father's legacy."
+        ),
+        "technique": (
+            "Foyatier worked within the French Neoclassical tradition, in which marble carving was the supreme sculptural medium "
+            "and technical mastery of surface — skin, fabric, hair, stone — was the benchmark of excellence. "
+            "La Siesta demonstrates his skill in differentiating textures within a single block: "
+            "the smooth warmth of flesh, the soft folds of drapery, and the firm surface of the pillow "
+            "are rendered in the same white marble through progressive chiselling and abrasion. "
+            "The reclining pose, while appearing simple, requires careful structural planning: "
+            "the weight of the horizontal figure must be distributed through the base "
+            "without the composition appearing stiff or top-heavy. "
+            "Foyatier's solution — the easy, natural curve of the body — makes the technical achievement invisible."
+        ),
+        "story": (
+            "The subject of La Siesta — an ordinary woman sleeping in the afternoon — "
+            "was a quietly radical choice for a major Salon work in 1834. "
+            "Academic sculpture of the period favoured mythological heroines, allegorical figures, and historical subjects. "
+            "A sleeping contemporary woman, without wings or attributes or narrative context, "
+            "was closer to genre painting than to monument-making. "
+            "Yet the work succeeded: it was shown at two Universal Expositions and entered the national collection. "
+            "The sculptor's daughters kept the work for decades after his death in 1863 "
+            "before donating it through General Deloye in 1897 — more than thirty years after Foyatier's death — "
+            "ensuring it reached the institution best equipped to preserve it. "
+            "It now rests in Salle 225 of the Richelieu wing, a quiet corner of the Louvre "
+            "where ordinary rest has been made permanent in marble."
+        ),
+        "content": (
+            "La Siesta is a marble sculpture by Denis Foyatier (1793–1863), dated 1848 and displayed in Salle 225, "
+            "Richelieu wing, Level 0 of the Louvre. "
+            "Measuring 154.5 cm wide, it depicts a reclining female figure in complete, natural sleep — "
+            "the sculptor's signature carved into her pillow. "
+            "A replica of the marble first shown at the Salon of 1834, "
+            "it was subsequently exhibited at the Universal Expositions of 1855 and 1889 "
+            "before entering the Louvre in 1897 as a gift from the sculptor's daughters. "
+            "One of the finest examples of French Neoclassical marble carving in the Louvre's collection."
+        ),
+    },
 ]
