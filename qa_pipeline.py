@@ -90,7 +90,9 @@ def run(
                 "I wasn't able to identify this sculpture as one of the works in my system. "
                 "I can tell you about: the Winged Victory of Samothrace, Venus de Milo, "
                 "Cupid and Psyche, the Borghese Gladiator, the Dying Slave, the Seated Scribe, "
-                "or the Bastet Cat Statue. Try scanning again with the sculpture clearly in frame, "
+                "the Bastet Cat Statue, Air, La Nuit, L'Hommage à Cézanne, La Siesta, "
+                "or the Miles Franklin Statue in Hurstville, Sydney. "
+                "Try scanning again with the sculpture clearly in frame, "
                 "or ask me about any of those works."
             ),
             "exhibit": "",

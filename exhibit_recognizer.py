@@ -22,7 +22,7 @@ def _get_client() -> OpenAI:
 
 SYSTEM_PROMPT = """You are a visual recognition assistant for MuseXR, a museum AR system.
 
-Your task: determine whether the image shows one of the nine specific sculptures below.
+Your task: determine whether the image shows one of the thirteen specific sculptures below.
 Each entry lists visual features that MUST ALL be present to confirm a match.
 
 1. Winged Victory of Samothrace
@@ -51,6 +51,15 @@ Each entry lists visual features that MUST ALL be present to confirm a match.
 
 9. Miles Franklin Statue
    MUST HAVE: seated woman in early 20th-century clothing, realistic bronze, at ground/street level on a bench or plinth
+
+10. La Nuit (Night)
+    MUST HAVE: compact bronze female figure seated on the ground, knees drawn up to chest, head bowed and buried in folded arms, no face visible
+
+11. L'Hommage à Cézanne
+    MUST HAVE: bronze or lead female figure in semi-reclining pose, upper body slightly raised, one arm resting on a bent knee, legs extended, outdoor garden setting
+
+12. La Siesta
+    MUST HAVE: marble reclining female figure lying on her side, fully horizontal, head resting on a pillow, draped fabric, indoor museum setting
 
 RULES:
 - Every listed MUST HAVE feature must be clearly visible before you return that sculpture's name.
