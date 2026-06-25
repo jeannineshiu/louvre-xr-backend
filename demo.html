@@ -547,6 +547,20 @@ async function submitQuestion() {
   await callAPI(q, false);
 }
 
+// ── Navigation detection ──────────────────────────────────────────────────────
+const NAV_KEYWORDS = [
+  'how do i get', 'how to get', 'how do i reach', 'how to reach',
+  'how do i walk', 'directions to', 'direction to',
+  'where is the', 'where can i find', 'how far is',
+  'walk to', 'navigate to', 'route to', 'way to',
+  'how long to walk', 'how to find', 'how do i find',
+  'get from', 'go to the', 'get to the',
+];
+function isNavQuestion(q) {
+  const lower = q.toLowerCase();
+  return NAV_KEYWORDS.some(k => lower.includes(k));
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 async function callAPI(question, isIntro) {
   busy = true;
@@ -557,7 +571,10 @@ async function callAPI(question, isIntro) {
     ? `[Regarding: ${currentExhibit}] ${question}`
     : question;
 
-  const body = { question: apiQuestion, mode: isIntro ? 'GLANCE_CARD' : 'FULL_VOICE' };
+  const mode = isIntro ? 'GLANCE_CARD'
+             : isNavQuestion(question) ? 'NAVIGATION'
+             : 'FULL_VOICE';
+  const body = { question: apiQuestion, mode };
   if (history.length)          body.history      = history;
   if (isIntro && imageB64)     body.image_base64  = imageB64;
 

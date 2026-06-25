@@ -46,6 +46,10 @@ _BASE_CONTEXT = (
     "The exhibition features iconic sculptures from antiquity to the 20th century. "
     "Use only the exhibit information below. "
     "Speak directly to the visitor as if they are standing in front of the sculpture.\n\n"
+    "Shop guidance: if the visitor asks generally about souvenirs or where to buy, "
+    "mention only the main boutique website (boutique.louvre.fr) without specific product URLs. "
+    "Only include a specific product URL when the visitor asks explicitly about a price, "
+    "a replica, or a particular item.\n\n"
     "Exhibit information:\n{context}\n\n"
     "Visitor question: {question}\n\n"
 )
@@ -101,11 +105,28 @@ PROMPT_BRIEF_TEXT_PROMPT = PromptTemplate(
     ),
 )
 
+# NAVIGATION — visitor is asking for walking directions between sculptures
+# Target: directions only, no art history, no shop info, max ~3 sentences.
+PROMPT_NAVIGATION = PromptTemplate(
+    input_variables=["context", "question"],
+    template=(
+        "You are a visitor guide for the Louvre Museum and surrounding areas.\n\n"
+        "Location data:\n{context}\n\n"
+        "Visitor question: {question}\n\n"
+        "Answer ONLY with walking directions. "
+        "Include room numbers, wing names, floor level, and estimated walking time. "
+        "Do NOT add art history, sculpture descriptions, shop information, or any other content. "
+        "Maximum 3 sentences.\n\n"
+        "Directions:"
+    ),
+)
+
 _PROMPTS = {
     "GLANCE_CARD":        PROMPT_GLANCE_CARD,
     "BRIEF_TEXT":         PROMPT_BRIEF_TEXT,
     "FULL_VOICE":         PROMPT_FULL_VOICE,
     "BRIEF_TEXT_PROMPT":  PROMPT_BRIEF_TEXT_PROMPT,
+    "NAVIGATION":         PROMPT_NAVIGATION,
 }
 
 # Fallback for any unrecognised mode
@@ -131,6 +152,11 @@ _MODE_INSTRUCTIONS = {
         "Answer in 2–3 sentences (around 50 words). "
         "At the end, add one friendly sentence suggesting the visitor find a quieter spot "
         "for a more complete audio guide experience."
+    ),
+    "NAVIGATION": (
+        "Answer ONLY with walking directions. "
+        "Include room numbers, wing names, floor level, and estimated walking time. "
+        "Do NOT add art history, descriptions, or any other content. Maximum 3 sentences."
     ),
 }
 
