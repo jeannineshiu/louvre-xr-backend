@@ -520,9 +520,9 @@ function addMsg(type, text) {
   const d = document.createElement('div');
   d.className = `msg ${type}`;
   if (type === 'ai') {
-    d.innerHTML = `<div class="lbl">Guide</div>${esc(text)}`;
+    d.innerHTML = `<div class="lbl">Guide</div>${linkify(esc(text))}`;
   } else if (type === 'error') {
-    d.innerHTML = `<div class="lbl">Error</div>${esc(text)}`;
+    d.innerHTML = `<div class="lbl">Error</div>${linkify(esc(text))}`;
   } else {
     d.textContent = text;
   }
@@ -534,6 +534,15 @@ function addMsg(type, text) {
 function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
           .replace(/\n/g,'<br>');
+}
+
+function linkify(s) {
+  // Convert plain URLs to clickable links after HTML escaping
+  return s.replace(
+    /(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer" '
+    + 'style="color:var(--gold);text-decoration:underline;word-break:break-all;">$1</a>'
+  );
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────
