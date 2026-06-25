@@ -85,7 +85,7 @@ EXHIBITS = [
         ),
         "shop": (
             "The Louvre boutique sells hand-patinated resin replicas of the Winged Victory in three sizes: "
-            "18 cm (€130), 34 cm, and 50 cm — each cast from a mould taken directly from the original marble. "
+            "18 cm, 34 cm, and 50 cm — each cast from a mould taken directly from the original marble. "
             "Also available: art prints from €22, a Monnaie de Paris souvenir medal, and a chalcography engraving. "
             "Browse the full collection at boutique.louvre.fr/en/products/400628-the-winged-victory-of-samothrace/"
         ),
@@ -353,8 +353,9 @@ EXHIBITS = [
         ),
         "shop": (
             "The Louvre boutique does not currently offer a dedicated replica of the Borghese Gladiator. "
-            "Art prints and posters of Greek antiquities from the Louvre collection are available from €22. "
-            "Visit boutique.louvre.fr or the on-site gift shop in the Louvre for the latest catalogue."
+            "However, art prints of works from the Louvre's Greek Antiquities collection are available from €22, "
+            "and the on-site gift shop at the Louvre may stock additional items. "
+            "Browse the art prints collection at boutique.louvre.fr/en/products/400047-art-prints/"
         ),
     },
     {
@@ -632,7 +633,7 @@ EXHIBITS = [
             "A hand-patinated resin replica of the Cat of the Goddess Bastet (16 × 7 × 9 cm) is available, "
             "as well as a bronze cast version and a version with a decorative necklace collar. "
             "An enamel pin of the Bastet cat is also available at €7.95. "
-            "Browse the full Egyptian collection at boutique.louvre.fr/en/products/400746-the-cat-bastet/"
+            "Browse the full collection at boutique.louvre.fr/en/products/400746-the-cat-bastet/"
         ),
     },
     {
@@ -1021,6 +1022,11 @@ EXHIBITS = [
             "To reach Winged Victory (Room 703): head east into the Denon wing, then climb the Daru Staircase to Level 1 — about 10 minutes. "
             "To reach the Seated Scribe (Room 635): head east into Sully, take the stairs to Level 1, then follow signs for Egyptian Antiquities — about 10 minutes. "
             "To reach Bastet Cat Statue (Room 630): same route as Seated Scribe; Room 630 is a few rooms before Room 635 in the same corridor — about 10 minutes."
+        ),
+        "shop": (
+            "The Louvre boutique does not currently offer dedicated merchandise for La Siesta by Denis Foyatier. "
+            "Art prints of works from the Louvre's sculpture collection are available from €22. "
+            "Browse the sculpture collection at boutique.louvre.fr/en/products/400013-sculpture/"
         ),
     },
 ]
