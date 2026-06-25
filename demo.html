@@ -536,6 +536,14 @@ function esc(s) {
           .replace(/\n/g,'<br>');
 }
 
+function stripURLsForSpeech(text) {
+  return text
+    .replace(/https?:\/\/[^\s]+/g, '')            // remove full https:// URLs
+    .replace(/(?<!\w)boutique\.louvre\.fr[^\s]*/g, '') // remove bare boutique URLs
+    .replace(/\s{2,}/g, ' ')                       // collapse extra spaces
+    .trim();
+}
+
 function linkify(s) {
   const style = 'color:var(--gold);text-decoration:underline;word-break:break-all;';
   const done  = [];
@@ -640,7 +648,7 @@ async function callAPI(question, isIntro) {
     const answer = data.answer || '';
     if (answer) {
       addMsg('ai', answer);
-      speak(answer);
+      speak(stripURLsForSpeech(answer));
       const storedQ = isIntro ? 'What is this sculpture?' : question;
       history.push({ role: 'user',      content: storedQ });
       history.push({ role: 'assistant', content: answer });
