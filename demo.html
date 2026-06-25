@@ -537,20 +537,32 @@ function esc(s) {
 }
 
 function linkify(s) {
-  // Match boutique.louvre.fr URLs with or without https:// prefix
-  // GPT-4o typically omits the protocol, so we handle both cases
-  return s.replace(
+  const style = 'color:var(--gold);text-decoration:underline;word-break:break-all;';
+  const done  = [];
+
+  // Step 1: Replace markdown links [text](url) with a placeholder so Step 2 doesn't re-process them
+  s = s.replace(
+    /\[([^\]]*)\]\(((?:https?:\/\/)?boutique\.louvre\.fr[^)]*)\)/g,
+    (_, text, url) => {
+      const href = url.startsWith('http') ? url : 'https://' + url;
+      done.push('<a href="' + href + '" target="_blank" rel="noopener noreferrer" style="' + style + '">' + text + '</a>');
+      return '\x00' + (done.length - 1) + '\x00';
+    }
+  );
+
+  // Step 2: Replace remaining plain boutique.louvre.fr URLs
+  s = s.replace(
     /((?:https?:\/\/)?boutique\.louvre\.fr[^\s<]*)/g,
     (match) => {
-      // Strip trailing punctuation that is not part of the URL
       const url      = match.replace(/[.,;:'")\]]+$/, '');
       const trailing = match.slice(url.length);
       const href     = url.startsWith('http') ? url : 'https://' + url;
-      return '<a href="' + href + '" target="_blank" rel="noopener noreferrer" '
-           + 'style="color:var(--gold);text-decoration:underline;word-break:break-all;">'
-           + url + '</a>' + trailing;
+      return '<a href="' + href + '" target="_blank" rel="noopener noreferrer" style="' + style + '">' + url + '</a>' + trailing;
     }
   );
+
+  // Step 3: Restore placeholders
+  return s.replace(/\x00(\d+)\x00/g, (_, i) => done[+i]);
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────

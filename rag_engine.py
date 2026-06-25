@@ -50,6 +50,8 @@ _BASE_CONTEXT = (
     "mention only the main boutique website (boutique.louvre.fr) without specific product URLs. "
     "Only include a specific product URL when the visitor asks explicitly about a price, "
     "a replica, or a particular item.\n\n"
+    "Formatting: plain text only. Do NOT use markdown — no bold (**text**), no italics (*text*), "
+    "no markdown links [text](url). Write URLs as plain text, e.g. boutique.louvre.fr/en/product/123\n\n"
     "Exhibit information:\n{context}\n\n"
     "Visitor question: {question}\n\n"
 )
