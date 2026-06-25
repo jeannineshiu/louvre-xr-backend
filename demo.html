@@ -590,6 +590,19 @@ function isNavQuestion(q) {
   return NAV_KEYWORDS.some(k => lower.includes(k));
 }
 
+// ── Shop detection ────────────────────────────────────────────────────────────
+const SHOP_KEYWORDS = [
+  'buy', 'purchase', 'order', 'shop', 'store', 'boutique',
+  'souvenir', 'gift', 'replica', 'reproduction', 'copy', 'figurine',
+  'price', 'cost', 'how much', 'euro', '€', 'cheap', 'expensive',
+  'poster', 'print', 'magnet', 'pin', 'merchandise', 'product',
+  'take home', 'bring home', 'for sale', 'available',
+];
+function isShopQuestion(q) {
+  const lower = q.toLowerCase();
+  return SHOP_KEYWORDS.some(k => lower.includes(k));
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 async function callAPI(question, isIntro) {
   busy = true;
@@ -600,8 +613,9 @@ async function callAPI(question, isIntro) {
     ? `[Regarding: ${currentExhibit}] ${question}`
     : question;
 
-  const mode = isIntro ? 'GLANCE_CARD'
-             : isNavQuestion(question) ? 'NAVIGATION'
+  const mode = isIntro          ? 'GLANCE_CARD'
+             : isNavQuestion(question)  ? 'NAVIGATION'
+             : isShopQuestion(question) ? 'SHOP'
              : 'FULL_VOICE';
   const body = { question: apiQuestion, mode };
   if (history.length)          body.history      = history;

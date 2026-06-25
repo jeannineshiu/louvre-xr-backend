@@ -46,10 +46,8 @@ _BASE_CONTEXT = (
     "The exhibition features iconic sculptures from antiquity to the 20th century. "
     "Use only the exhibit information below. "
     "Speak directly to the visitor as if they are standing in front of the sculpture.\n\n"
-    "Shop guidance: if the visitor asks generally about souvenirs or where to buy, "
-    "mention only the main boutique website (boutique.louvre.fr) without specific product URLs. "
-    "Only include a specific product URL when the visitor asks explicitly about a price, "
-    "a replica, or a particular item.\n\n"
+    "Shop guidance: whenever the visitor asks about merchandise, souvenirs, replicas, or where to buy, "
+    "always include the relevant product URL from the exhibit information in your first response.\n\n"
     "Formatting: plain text only. Do NOT use markdown — no bold (**text**), no italics (*text*), "
     "no markdown links [text](url). Write URLs as plain text, e.g. boutique.louvre.fr/en/product/123\n\n"
     "Exhibit information:\n{context}\n\n"
@@ -123,12 +121,31 @@ PROMPT_NAVIGATION = PromptTemplate(
     ),
 )
 
+# SHOP — visitor is asking about merchandise, souvenirs, replicas, or where to buy
+# Target: product info + URL only, no art history, max ~3 sentences.
+PROMPT_SHOP = PromptTemplate(
+    input_variables=["context", "question"],
+    template=(
+        "You are a shopping assistant for the Louvre Museum boutique.\n\n"
+        "Exhibit and shop information:\n{context}\n\n"
+        "Visitor question: {question}\n\n"
+        "Answer ONLY with merchandise information. "
+        "Structure your answer as follows: first mention the available products and prices, "
+        "then end with the shop URL from the exhibit information. "
+        "Always include the shop URL — it must appear in your answer. "
+        "Do NOT add art history, navigation directions, or any other content. "
+        "Plain text only — no markdown formatting. Maximum 3 sentences.\n\n"
+        "Shop answer:"
+    ),
+)
+
 _PROMPTS = {
     "GLANCE_CARD":        PROMPT_GLANCE_CARD,
     "BRIEF_TEXT":         PROMPT_BRIEF_TEXT,
     "FULL_VOICE":         PROMPT_FULL_VOICE,
     "BRIEF_TEXT_PROMPT":  PROMPT_BRIEF_TEXT_PROMPT,
     "NAVIGATION":         PROMPT_NAVIGATION,
+    "SHOP":               PROMPT_SHOP,
 }
 
 # Fallback for any unrecognised mode
@@ -159,6 +176,11 @@ _MODE_INSTRUCTIONS = {
         "Answer ONLY with walking directions. "
         "Include room numbers, wing names, floor level, and estimated walking time. "
         "Do NOT add art history, descriptions, or any other content. Maximum 3 sentences."
+    ),
+    "SHOP": (
+        "Answer ONLY with merchandise information: available products, prices, sizes, and the shop URL. "
+        "Always include the product URL. "
+        "Do NOT add art history, navigation, or any other content. Plain text only. Maximum 3 sentences."
     ),
 }
 

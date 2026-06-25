@@ -30,6 +30,7 @@ MODE_MAX_LENGTH: dict[str, int | None] = {
     "BRIEF_TEXT_PROMPT":  450,
     "FULL_VOICE":         None,
     "NAVIGATION":         400,
+    "SHOP":               600,
 }
 
 # Keep old names as aliases so nothing outside breaks if they were imported

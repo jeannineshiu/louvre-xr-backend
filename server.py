@@ -28,7 +28,7 @@ _rag: RAGEngine | None = None
 # Request / response schema
 # ---------------------------------------------------------------------------
 
-VALID_MODES = {"GLANCE_CARD", "BRIEF_TEXT", "FULL_VOICE", "BRIEF_TEXT_PROMPT", "NAVIGATION"}
+VALID_MODES = {"GLANCE_CARD", "BRIEF_TEXT", "FULL_VOICE", "BRIEF_TEXT_PROMPT", "NAVIGATION", "SHOP"}
 
 
 class AskStateInput(BaseModel):
