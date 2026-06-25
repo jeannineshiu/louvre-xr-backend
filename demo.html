@@ -537,11 +537,19 @@ function esc(s) {
 }
 
 function linkify(s) {
-  // Convert plain URLs to clickable links after HTML escaping
+  // Match boutique.louvre.fr URLs with or without https:// prefix
+  // GPT-4o typically omits the protocol, so we handle both cases
   return s.replace(
-    /(https?:\/\/[^\s<]+)/g,
-    '<a href="$1" target="_blank" rel="noopener noreferrer" '
-    + 'style="color:var(--gold);text-decoration:underline;word-break:break-all;">$1</a>'
+    /((?:https?:\/\/)?boutique\.louvre\.fr[^\s<]*)/g,
+    (match) => {
+      // Strip trailing punctuation that is not part of the URL
+      const url      = match.replace(/[.,;:'")\]]+$/, '');
+      const trailing = match.slice(url.length);
+      const href     = url.startsWith('http') ? url : 'https://' + url;
+      return '<a href="' + href + '" target="_blank" rel="noopener noreferrer" '
+           + 'style="color:var(--gold);text-decoration:underline;word-break:break-all;">'
+           + url + '</a>' + trailing;
+    }
   );
 }
 
