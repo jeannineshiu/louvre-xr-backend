@@ -577,38 +577,92 @@ void HandleResponse(AskResponse resp)
 
 Navigation questions must now call `GET /navigate` directly — they will **not** work correctly via `POST /ask` because navigation data is no longer stored in the FAISS index.
 
-**Exhibit ID mapping** — cache the ID when recognition returns the exhibit name:
+**Step 1 — Data structures**
 
 ```csharp
+// Map the exhibit name returned by the API to its route ID
 private static readonly Dictionary<string, string> ExhibitIds = new()
 {
-    { "Winged Victory of Samothrace", "winged_victory_of_samothrace" },
-    { "Venus de Milo",                "venus_de_milo" },
-    { "Cupid and Psyche",             "cupid_and_psyche" },
-    { "The Borghese Gladiator",       "borghese_gladiator" },
-    { "The Dying Slave",              "the_dying_slave" },
-    { "The Seated Scribe (The Crouching Scribe)", "the_crouching_scribe" },
-    { "Bastet Cat Statue",            "bastet_cat_statue" },
-    { "La Siesta",                    "la_siesta_foyatier" },
+    { "Winged Victory of Samothrace",          "winged_victory_of_samothrace" },
+    { "Venus de Milo",                         "venus_de_milo"                },
+    { "Cupid and Psyche",                      "cupid_and_psyche"             },
+    { "The Borghese Gladiator",                "borghese_gladiator"           },
+    { "The Dying Slave",                       "the_dying_slave"              },
+    { "The Seated Scribe (The Crouching Scribe)", "the_crouching_scribe"      },
+    { "Bastet Cat Statue",                     "bastet_cat_statue"            },
+    { "La Siesta",                             "la_siesta_foyatier"           },
 };
+
+// Keywords that indicate a navigation question
+private static readonly string[] NavKeywords =
+{
+    "how do i get", "how to get", "how do i reach", "how to reach",
+    "directions to", "direction to", "where is the", "walk to",
+    "how far is", "route to", "how do i find", "get to the",
+};
+
+// Keywords that identify each destination exhibit
+private static readonly (string id, string[] keywords)[] ExhibitKeywords =
+{
+    ("winged_victory_of_samothrace", new[]{ "winged victory", "samothrace", "nike", "daru" }),
+    ("venus_de_milo",                new[]{ "venus de milo", "venus", "aphrodite", "milo" }),
+    ("cupid_and_psyche",             new[]{ "cupid and psyche", "cupid", "psyche", "canova" }),
+    ("borghese_gladiator",           new[]{ "borghese gladiator", "borghese", "gladiator" }),
+    ("the_dying_slave",              new[]{ "dying slave", "slave" }),
+    ("the_crouching_scribe",         new[]{ "seated scribe", "crouching scribe", "scribe" }),
+    ("bastet_cat_statue",            new[]{ "bastet", "cat statue", "egyptian cat" }),
+    ("la_siesta_foyatier",           new[]{ "la siesta", "siesta", "foyatier" }),
+};
+
+[Serializable] public class NavigateResponse
+{
+    public bool   found;
+    public string directions;
+    public string from_name;
+    public string to_name;
+}
 ```
 
-**Navigation coroutine:**
+**Step 2 — Helper methods**
 
 ```csharp
 private string _currentExhibitId = "";
 
-// Call this when recognition succeeds
+// Call this immediately after a successful recognition response
 void OnExhibitRecognised(string exhibitName)
 {
     if (ExhibitIds.TryGetValue(exhibitName, out var id))
         _currentExhibitId = id;
 }
 
-// Call this when visitor asks a navigation question
-IEnumerator NavigateTo(string toExhibitId)
+// Returns true if the visitor's question is asking for directions
+bool IsNavigationQuestion(string question)
 {
-    string url = $"{BASE_URL}/navigate?from_exhibit={_currentExhibitId}&to_exhibit={toExhibitId}";
+    var lower = question.ToLower();
+    foreach (var kw in NavKeywords)
+        if (lower.Contains(kw)) return true;
+    return false;
+}
+
+// Tries to extract the destination exhibit from the question text
+// Returns null if the destination cannot be determined
+string ParseDestinationId(string question)
+{
+    var lower = question.ToLower();
+    foreach (var (id, keywords) in ExhibitKeywords)
+        foreach (var kw in keywords)
+            if (lower.Contains(kw)) return id;
+    return null;
+}
+```
+
+**Step 3 — Navigation coroutine**
+
+```csharp
+IEnumerator NavigateTo(string toExhibitId, string originalQuestion)
+{
+    string url = $"{BASE_URL}/navigate" +
+                 $"?from_exhibit={_currentExhibitId}&to_exhibit={toExhibitId}";
     using var req = UnityWebRequest.Get(url);
     yield return req.SendWebRequest();
 
@@ -616,16 +670,41 @@ IEnumerator NavigateTo(string toExhibitId)
     {
         var resp = JsonUtility.FromJson<NavigateResponse>(req.downloadHandler.text);
         if (resp.found)
-            ShowDirections(resp.directions);
+        {
+            ShowDirections(resp.directions);   // display/speak the directions
+            return;
+        }
     }
+    // Fallback: route not found — send to /ask as a normal question
+    yield return AskServer(originalQuestion, 0f, "low", "quiet");
 }
 ```
 
+**Step 4 — Integrate into your main ask flow**
+
+Replace your current `AskServer()` call with this dispatcher:
+
 ```csharp
-[Serializable] public class NavigateResponse { public bool found; public string directions; public string from_name; public string to_name; }
+IEnumerator AskOrNavigate(string question, float gazeDuration, string crowd, string noise)
+{
+    // If it's a navigation question and we know which exhibit we're at,
+    // try the direct route lookup first
+    if (IsNavigationQuestion(question) && !string.IsNullOrEmpty(_currentExhibitId))
+    {
+        string toId = ParseDestinationId(question);
+        if (toId != null && toId != _currentExhibitId)
+        {
+            yield return NavigateTo(toId, question);
+            yield break;
+        }
+    }
+
+    // Everything else goes to /ask as before
+    yield return AskServer(question, gazeDuration, crowd, noise);
+}
 ```
 
-The destination exhibit ID must be resolved on-device from the visitor's spoken or typed question (keyword matching against exhibit names). If the destination cannot be determined, fall back to `POST /ask` with `mode: "NAVIGATION"`.
+Call `AskOrNavigate()` everywhere you previously called `AskServer()` for visitor questions.
 
 ---
 
