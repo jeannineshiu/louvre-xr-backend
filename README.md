@@ -44,7 +44,8 @@ louvre-ar-backend/
 ├── context_router.py       # Decides response mode from gaze_duration + crowd + noise
 ├── rag_engine.py           # RAG: FAISS vector store + GPT-4o, mode-specific prompts
 ├── exhibit_recognizer.py   # GPT-4o Vision: identify sculpture from camera frame
-├── exhibits_data.py        # Museum knowledge base (12 sculptures: 8 main + 4 testing, 7 sections each)
+├── exhibits_data.py        # Museum knowledge base (12 sculptures: 8 main + 4 testing, 6 sections each)
+├── navigation_routes.py    # Direct (from_id, to_id) route lookup table — 56 routes, no FAISS
 │
 ├── faiss_index/            # Pre-built FAISS vector index (committed — no rebuild needed)
 │   ├── index.faiss
@@ -75,9 +76,9 @@ Eight sculptures displayed inside the Louvre museum building, spanning antiquity
 | Bastet Cat Statue | Unknown (Egyptian Late Period) | c. 664–332 BC | Salle 630, Sully — Egyptian Antiquities, Level 1 |
 | La Siesta | Denis Foyatier | 1848 | Salle 225, Richelieu — Modern Sculpture, Level 0 |
 
-Each main exhibit has seven structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`, `shop`, `navigation`.
+Each main exhibit has six structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`, `shop`.
 
-The `navigation` section provides step-by-step walking directions from each exhibit to every other main exhibit — covering all 56 directional routes across the three wings and two floors of the Louvre. Visitors can ask questions like *"How do I get to the Seated Scribe from here?"* and receive specific directions with room numbers, wing names, and estimated walking times.
+**Navigation** is handled separately via `navigation_routes.py` — a direct `(from_id, to_id)` lookup table with 56 pre-written routes covering all pairs of main exhibits. Navigation does not go through FAISS or GPT-4o: the frontend detects a navigation question, resolves the destination exhibit, and calls `GET /navigate` directly for a deterministic, instant response. Visitors can ask *"How do I get to the Seated Scribe from here?"* and receive specific directions with room numbers, wing names, and estimated walking times.
 
 ---
 
@@ -449,6 +450,49 @@ The server does **not** guess or fall back to a random sculpture — it tells th
 
 ## API Reference
 
+### `GET /navigate`
+
+Direct walking-directions lookup. No FAISS, no LLM — instant dictionary lookup.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `from_exhibit` | `string` | Yes | ID of the visitor's current exhibit |
+| `to_exhibit` | `string` | Yes | ID of the destination exhibit |
+
+**Exhibit IDs:**
+
+| Exhibit | ID |
+|---|---|
+| Winged Victory of Samothrace | `winged_victory_of_samothrace` |
+| Venus de Milo | `venus_de_milo` |
+| Cupid and Psyche | `cupid_and_psyche` |
+| The Borghese Gladiator | `borghese_gladiator` |
+| The Dying Slave | `the_dying_slave` |
+| The Seated Scribe | `the_crouching_scribe` |
+| Bastet Cat Statue | `bastet_cat_statue` |
+| La Siesta | `la_siesta_foyatier` |
+
+**Response:**
+```json
+{
+  "found": true,
+  "directions": "Head north through the Sully wing and take the stairs to Level 1...",
+  "from_name": "Venus de Milo",
+  "to_name": "The Seated Scribe"
+}
+```
+
+If `from_exhibit == to_exhibit`, returns `"You are already at [name]."`. If the route is not found, returns `{ "found": false, "directions": "" }`.
+
+**Example:**
+```bash
+curl "<BASE_URL>/navigate?from_exhibit=venus_de_milo&to_exhibit=the_crouching_scribe"
+```
+
+---
+
 ### `GET /demo`
 
 Returns the browser demo page (`demo.html`). Open in a phone browser for the full voice chat interface.
@@ -528,6 +572,60 @@ void HandleResponse(AskResponse resp)
 [Serializable] public class AskResponse { public string mode; public string answer; public string exhibit; }
 [Serializable] public class HistoryMessage { public string role; public string content; }
 ```
+
+### Navigation — `GET /navigate` ⚠️ Required change
+
+Navigation questions must now call `GET /navigate` directly — they will **not** work correctly via `POST /ask` because navigation data is no longer stored in the FAISS index.
+
+**Exhibit ID mapping** — cache the ID when recognition returns the exhibit name:
+
+```csharp
+private static readonly Dictionary<string, string> ExhibitIds = new()
+{
+    { "Winged Victory of Samothrace", "winged_victory_of_samothrace" },
+    { "Venus de Milo",                "venus_de_milo" },
+    { "Cupid and Psyche",             "cupid_and_psyche" },
+    { "The Borghese Gladiator",       "borghese_gladiator" },
+    { "The Dying Slave",              "the_dying_slave" },
+    { "The Seated Scribe (The Crouching Scribe)", "the_crouching_scribe" },
+    { "Bastet Cat Statue",            "bastet_cat_statue" },
+    { "La Siesta",                    "la_siesta_foyatier" },
+};
+```
+
+**Navigation coroutine:**
+
+```csharp
+private string _currentExhibitId = "";
+
+// Call this when recognition succeeds
+void OnExhibitRecognised(string exhibitName)
+{
+    if (ExhibitIds.TryGetValue(exhibitName, out var id))
+        _currentExhibitId = id;
+}
+
+// Call this when visitor asks a navigation question
+IEnumerator NavigateTo(string toExhibitId)
+{
+    string url = $"{BASE_URL}/navigate?from_exhibit={_currentExhibitId}&to_exhibit={toExhibitId}";
+    using var req = UnityWebRequest.Get(url);
+    yield return req.SendWebRequest();
+
+    if (req.result == UnityWebRequest.Result.Success)
+    {
+        var resp = JsonUtility.FromJson<NavigateResponse>(req.downloadHandler.text);
+        if (resp.found)
+            ShowDirections(resp.directions);
+    }
+}
+```
+
+```csharp
+[Serializable] public class NavigateResponse { public bool found; public string directions; public string from_name; public string to_name; }
+```
+
+The destination exhibit ID must be resolved on-device from the visitor's spoken or typed question (keyword matching against exhibit names). If the destination cannot be determined, fall back to `POST /ask` with `mode: "NAVIGATION"`.
 
 ---
 
