@@ -18,6 +18,7 @@ from pydantic import BaseModel, field_validator
 from typing import Literal
 
 from rag_engine import RAGEngine
+from navigation_routes import ROUTES, EXHIBIT_NAMES
 import qa_pipeline
 
 # RAGEngine singleton — loaded once at startup, shared across requests
@@ -125,6 +126,24 @@ def ask(req: AskRequest):
         answer=result["answer"],
         exhibit=result["exhibit"],
     )
+
+
+@app.get("/navigate")
+def navigate(from_exhibit: str, to_exhibit: str):
+    """Direct route lookup — no FAISS, no LLM."""
+    if from_exhibit == to_exhibit:
+        name = EXHIBIT_NAMES.get(from_exhibit, from_exhibit)
+        return {"found": True, "directions": f"You are already at {name}."}
+    key = (from_exhibit, to_exhibit)
+    directions = ROUTES.get(key)
+    if not directions:
+        return {"found": False, "directions": ""}
+    return {
+        "found":      True,
+        "directions": directions,
+        "from_name":  EXHIBIT_NAMES.get(from_exhibit, from_exhibit),
+        "to_name":    EXHIBIT_NAMES.get(to_exhibit, to_exhibit),
+    }
 
 
 @app.get("/demo")

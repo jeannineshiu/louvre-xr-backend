@@ -573,6 +573,71 @@ function linkify(s) {
   return s.replace(/\x00(\d+)\x00/g, (_, i) => done[+i]);
 }
 
+// ── Exhibit ID lookup (for navigation) ───────────────────────────────────────
+const EXHIBIT_MAP = [
+  { id: 'winged_victory_of_samothrace', name: 'Winged Victory of Samothrace',
+    keywords: ['winged victory', 'victory of samothrace', 'samothrace', 'nike', 'daru'] },
+  { id: 'venus_de_milo', name: 'Venus de Milo',
+    keywords: ['venus de milo', 'venus', 'aphrodite', 'milo'] },
+  { id: 'cupid_and_psyche', name: 'Cupid and Psyche',
+    keywords: ['cupid and psyche', 'cupid', 'psyche', 'canova'] },
+  { id: 'borghese_gladiator', name: 'The Borghese Gladiator',
+    keywords: ['borghese gladiator', 'borghese', 'gladiator', 'agasias'] },
+  { id: 'the_dying_slave', name: 'The Dying Slave',
+    keywords: ['dying slave', 'dying slave', 'michelangelo slave'] },
+  { id: 'the_crouching_scribe', name: 'The Seated Scribe',
+    keywords: ['seated scribe', 'crouching scribe', 'scribe', 'egyptian scribe'] },
+  { id: 'bastet_cat_statue', name: 'Bastet Cat Statue',
+    keywords: ['bastet', 'cat statue', 'bastet cat', 'egyptian cat'] },
+  { id: 'la_siesta_foyatier', name: 'La Siesta',
+    keywords: ['la siesta', 'siesta', 'foyatier'] },
+];
+
+function exhibitNameToId(name) {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  const match = EXHIBIT_MAP.find(e =>
+    lower.includes(e.name.toLowerCase()) || e.name.toLowerCase().includes(lower) ||
+    e.keywords.some(k => lower.includes(k))
+  );
+  return match ? match.id : null;
+}
+
+function parseNavDestination(question) {
+  const lower = question.toLowerCase();
+  for (const exhibit of EXHIBIT_MAP) {
+    if (exhibit.keywords.some(k => lower.includes(k))) return exhibit.id;
+  }
+  return null;
+}
+
+// ── Direct navigation lookup ──────────────────────────────────────────────────
+async function callNavigation(fromId, toId, question) {
+  busy = true;
+  const thinking = addMsg('thinking', 'Thinking…');
+  try {
+    const res = await fetch(`${BASE_URL}/navigate?from_exhibit=${fromId}&to_exhibit=${toId}`);
+    thinking.remove();
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.found) {
+      addMsg('ai', data.directions);
+      speak(stripURLsForSpeech(data.directions));
+      history.push({ role: 'user',      content: question });
+      history.push({ role: 'assistant', content: data.directions });
+    } else {
+      // Fallback: ask the full RAG pipeline
+      await callAPI(question, false, true);
+    }
+  } catch (err) {
+    thinking.remove();
+    addMsg('error', `Navigation error: ${err.message}`);
+  } finally {
+    busy = false;
+    onType();
+  }
+}
+
 // ── Submit ────────────────────────────────────────────────────────────────────
 async function submitQuestion() {
   const q = textIn.value.trim();
@@ -581,6 +646,17 @@ async function submitQuestion() {
   sendBtn.disabled = true;
   stopSpeaking();
   addMsg('user', q);
+
+  // Try direct navigation lookup first
+  if (isNavQuestion(q) && currentExhibit) {
+    const fromId = exhibitNameToId(currentExhibit);
+    const toId   = parseNavDestination(q);
+    if (fromId && toId && fromId !== toId) {
+      await callNavigation(fromId, toId, q);
+      return;
+    }
+  }
+
   await callAPI(q, false);
 }
 
@@ -612,7 +688,8 @@ function isShopQuestion(q) {
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
-async function callAPI(question, isIntro) {
+// skipNavDetect=true when called as fallback from callNavigation (route not found)
+async function callAPI(question, isIntro, skipNavDetect = false) {
   busy = true;
   const thinking = addMsg('thinking', 'Thinking…');
 
@@ -621,9 +698,9 @@ async function callAPI(question, isIntro) {
     ? `[Regarding: ${currentExhibit}] ${question}`
     : question;
 
-  const mode = isIntro          ? 'GLANCE_CARD'
-             : isNavQuestion(question)  ? 'NAVIGATION'
-             : isShopQuestion(question) ? 'SHOP'
+  const mode = isIntro                               ? 'GLANCE_CARD'
+             : (!skipNavDetect && isNavQuestion(question)) ? 'NAVIGATION'
+             : isShopQuestion(question)              ? 'SHOP'
              : 'FULL_VOICE';
   const body = { question: apiQuestion, mode };
   if (history.length)          body.history      = history;
