@@ -19,6 +19,9 @@ from typing import Literal
 
 from pathlib import Path
 
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from rag_engine import RAGEngine
 from navigation_routes import ROUTES, EXHIBIT_NAMES
 from tts import generate_sophie_audio
@@ -66,7 +69,17 @@ class AskResponse(BaseModel):
     mode:      str        # NO_RESPONSE | BRIEF_TEXT | GLANCE_CARD | FULL_VOICE | BRIEF_TEXT_PROMPT
     answer:    str        # text answer; empty for NO_RESPONSE
     exhibit:   str        # recognised exhibit name; empty if not identified
-    audio_url: str | None = None  # ElevenLabs TTS mp3 URL; only present when request voice=True
+    audio_url: str | None = None  # TTS mp3 URL; only present when request voice=True
+
+
+class SessionStartRequest(BaseModel):
+    exhibit: str | None = None  # exhibit name if already identified; omit for generic welcome
+    voice:   bool = False       # if True, generate TTS audio and return audio_url
+
+
+class SessionStartResponse(BaseModel):
+    greeting:  str
+    audio_url: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +185,48 @@ def audio(file_id: str):
 @app.get("/demo")
 def demo():
     return FileResponse("demo.html", media_type="text/html")
+
+
+@app.post("/session/start", response_model=SessionStartResponse)
+def session_start(req: SessionStartRequest, request: Request):
+    """
+    Generate Sophie's welcome greeting when a visitor joins a multiplayer room.
+    Optionally include the exhibit name if already identified.
+    Pass voice=true to receive a TTS audio URL for broadcast to all room members.
+    """
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.4)
+
+    if req.exhibit:
+        prompt = (
+            f"A group of visitors has just joined a shared WebXR tour room. "
+            f"They are standing in front of '{req.exhibit}'. "
+            f"Greet them warmly as Sophie, their MuseXR guide, in 2–3 sentences. "
+            f"Welcome them, mention the sculpture by name, and invite them to ask you anything."
+        )
+    else:
+        prompt = (
+            "A group of visitors has just joined a shared WebXR tour room at the Louvre Museum. "
+            "Greet them warmly as Sophie, their MuseXR guide, in 2–3 sentences. "
+            "Welcome them to the experience and invite them to point their camera at any sculpture "
+            "or ask you anything about the collection."
+        )
+
+    system = (
+        "You are Sophie, a warm and knowledgeable museum guide for MuseXR. "
+        "Speak in a friendly, personal tone. Plain text only — no markdown."
+    )
+
+    response  = llm.invoke([SystemMessage(content=system), HumanMessage(content=prompt)])
+    greeting  = response.content.strip()
+
+    audio_url: str | None = None
+    if req.voice and greeting:
+        file_id = generate_sophie_audio(greeting)
+        if file_id:
+            base      = str(request.base_url).rstrip("/")
+            audio_url = f"{base}/audio/{file_id}"
+
+    return SessionStartResponse(greeting=greeting, audio_url=audio_url)
 
 
 @app.get("/tts-debug")
