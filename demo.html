@@ -454,6 +454,15 @@ function toggleMic() {
           callNavigation(fromId, toId, t);
           return;
         }
+        if (fromId && !toId) {
+          const msg = 'Which sculpture would you like directions to? '
+                    + 'I can guide you to the Winged Victory, Venus de Milo, '
+                    + 'Cupid and Psyche, the Borghese Gladiator, the Dying Slave, '
+                    + 'the Seated Scribe, the Bastet Cat Statue, or La Siesta.';
+          addMsg('ai', msg);
+          speak(msg);
+          return;
+        }
       }
       callAPI(t, false);
     }
@@ -663,6 +672,16 @@ async function submitQuestion() {
     const toId   = parseNavDestination(q);
     if (fromId && toId && fromId !== toId) {
       await callNavigation(fromId, toId, q);
+      return;
+    }
+    // Navigation intent detected but destination unclear — ask for clarification
+    if (fromId && !toId) {
+      const msg = 'Which sculpture would you like directions to? '
+                + 'I can guide you to the Winged Victory, Venus de Milo, '
+                + 'Cupid and Psyche, the Borghese Gladiator, the Dying Slave, '
+                + 'the Seated Scribe, the Bastet Cat Statue, or La Siesta.';
+      addMsg('ai', msg);
+      speak(msg);
       return;
     }
   }
