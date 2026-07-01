@@ -515,6 +515,7 @@ Returns the browser demo page (`demo.html`). Open in a phone browser for the ful
 | `state.gaze_duration` | `float` (seconds) | No | Default: `0.0` |
 | `mode` | `string` | No | Direct mode override — takes priority over `state` |
 | `history` | `array of {role, content}` | No | Prior conversation turns. `role` must be `"user"` or `"assistant"` — returns 422 otherwise. See [Conversation History](#conversation-history). |
+| `voice` | `boolean` | No | Default: `false`. If `true`, generates a Sophie TTS audio file and returns `audio_url`. Use for multi-user broadcast via Netblocks. |
 
 **Priority:** `mode` (if set) → `state` (if set) → default `FULL_VOICE`
 
@@ -525,6 +526,49 @@ Returns the browser demo page (`demo.html`). Open in a phone browser for the ful
 | `mode` | The mode used: `NO_RESPONSE` \| `BRIEF_TEXT` \| `GLANCE_CARD` \| `FULL_VOICE` \| `BRIEF_TEXT_PROMPT` |
 | `answer` | Text answer; empty string when `mode` is `NO_RESPONSE` |
 | `exhibit` | Recognised sculpture name; empty string if not identified |
+| `audio_url` | Full HTTPS URL of the generated mp3 file. Only present when `voice: true`. All room members can fetch this URL directly. |
+
+---
+
+### `POST /session/start`
+
+Generates Sophie's welcome greeting when visitors join a shared WebXR room. Designed for multi-user entry points — call once, broadcast the `audio_url` to all room members.
+
+**Request fields:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `exhibit` | `string` | No | Exhibit name if already identified — Sophie will reference it in the greeting. Omit for a generic welcome. |
+| `voice` | `boolean` | No | Default: `false`. If `true`, generates TTS audio and returns `audio_url`. |
+
+**Response:**
+
+| Field | Notes |
+|---|---|
+| `greeting` | Sophie's welcome text (2–3 sentences) |
+| `audio_url` | Full HTTPS URL of the mp3. Only present when `voice: true`. |
+
+**Examples:**
+
+```bash
+# Generic welcome
+curl -X POST <BASE_URL>/session/start \
+  -H "Content-Type: application/json" \
+  -d '{"voice": true}'
+
+# Sculpture-specific welcome
+curl -X POST <BASE_URL>/session/start \
+  -H "Content-Type: application/json" \
+  -d '{"exhibit": "Venus de Milo", "voice": true}'
+```
+
+**Example response:**
+```json
+{
+  "greeting": "Welcome, everyone! I'm Sophie, your MuseXR guide. Today we're standing before the Venus de Milo — one of the most iconic sculptures in the world. Ask me anything!",
+  "audio_url": "https://louvre-xr-backend-production.up.railway.app/audio/abc123-..."
+}
+```
 
 ---
 
@@ -705,6 +749,91 @@ IEnumerator AskOrNavigate(string question, float gazeDuration, string crowd, str
 ```
 
 Call `AskOrNavigate()` everywhere you previously called `AskServer()` for visitor questions.
+
+---
+
+## Multi-User Experience — WebXR / Netblocks Integration
+
+Designed for [webxr-worldmodels.vercel.app](https://webxr-worldmodels.vercel.app) using IWSDK and Netblocks multiplayer. Sophie acts as a shared tour guide — when anyone asks a question, everyone in the room hears her answer simultaneously.
+
+### Sophie persona
+
+All answers come from **Sophie**, a warm and knowledgeable museum guide. The persona is applied server-side — no frontend changes needed for this.
+
+### Architecture
+
+```
+Any user speaks → STT → POST /ask (voice: true)
+                              ↓
+              Backend: RAG answer + OpenAI TTS
+                              ↓
+                     { answer, audio_url }
+                              ↓
+         Frontend: Netblocks broadcast audio_url
+                              ↓
+          All room members fetch URL → play audio
+```
+
+### Room entry — `POST /session/start`
+
+Call this when a user joins the room. Sophie greets everyone; broadcast the audio to all members.
+
+```javascript
+async function onRoomJoin(currentExhibit = null) {
+  const body = { voice: true };
+  if (currentExhibit) body.exhibit = currentExhibit;
+
+  const resp = await fetch(`${BASE_URL}/session/start`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
+  const data = await resp.json();
+
+  // Broadcast Sophie's greeting to everyone
+  if (data.audio_url) {
+    netblocksRoom.broadcast({ type: 'sophie_audio', url: data.audio_url });
+  }
+}
+```
+
+### Q&A — `POST /ask` with `voice: true`
+
+Add `voice: true` to every Q&A request. The same Netblocks handler works for both greetings and answers.
+
+```javascript
+async function askSophie(question) {
+  const resp = await fetch(`${BASE_URL}/ask`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ question, mode: 'FULL_VOICE', voice: true }),
+  });
+  const data = await resp.json();
+
+  // Display text for the person who asked
+  showSubtitle(data.answer);
+
+  // Broadcast audio to everyone in the room
+  if (data.audio_url) {
+    netblocksRoom.broadcast({ type: 'sophie_audio', url: data.audio_url });
+  }
+}
+
+// Every user plays the audio when they receive the broadcast
+netblocksRoom.on('sophie_audio', ({ url }) => {
+  new Audio(url).play();
+});
+```
+
+### Sophie's TTS voice
+
+Sophie's voice is generated using **OpenAI TTS** (`nova` voice, `tts-1` model). The voice is configurable via the `SOPHIE_VOICE` environment variable on Railway. Options: `alloy` \| `echo` \| `fable` \| `onyx` \| `nova` \| `shimmer`.
+
+### Important notes
+
+- The `audio_url` is a **full HTTPS URL** — all room members can fetch it directly without any proxy.
+- Audio files are stored temporarily on the server. For a production deployment, consider moving to cloud storage (S3, etc.).
+- The `/ask` and `/session/start` `voice` parameter defaults to `false` — existing Quest and demo clients are unaffected.
 
 ---
 
