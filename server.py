@@ -176,31 +176,17 @@ def demo():
 
 @app.get("/tts-debug")
 def tts_debug():
-    """Temporary: test ElevenLabs connection and report status."""
-    import os, requests as req_lib
-    key     = os.environ.get("ELEVENLABS_API_KEY", "")
-    voice   = os.environ.get("SOPHIE_VOICE_ID", "")
+    """Test OpenAI TTS connection and report status."""
+    import os
+    from tts import generate_sophie_audio, SOPHIE_VOICE
+    key   = os.environ.get("OPENAI_API_KEY", "")
     if not key:
-        return {"status": "error", "reason": "ELEVENLABS_API_KEY not set"}
-    try:
-        resp = req_lib.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
-            headers={"xi-api-key": key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
-            json={"text": "Hello.", "model_id": "eleven_turbo_v2",
-                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}},
-            timeout=15,
-        )
-        return {"status": "ok" if resp.status_code == 200 else "error",
-                "http_status": resp.status_code,
-                "voice_id": voice,
-                "key_prefix": key[:8] + "...",
-                "key_length": len(key),
-                "key_has_spaces": " " in key,
-                "key_has_newline": "\n" in key or "\r" in key,
-                "response_bytes": len(resp.content),
-                "elevenlabs_error": resp.text if resp.status_code != 200 else "ok"}
-    except Exception as e:
-        return {"status": "error", "reason": str(e)}
+        return {"status": "error", "reason": "OPENAI_API_KEY not set"}
+    file_id = generate_sophie_audio("Hello, I am Sophie.")
+    if file_id:
+        return {"status": "ok", "voice": SOPHIE_VOICE,
+                "file_id": file_id, "audio_url": f"/audio/{file_id}"}
+    return {"status": "error", "reason": "TTS generation failed — check Railway logs"}
 
 
 @app.get("/health")
