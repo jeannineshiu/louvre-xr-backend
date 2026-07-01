@@ -186,7 +186,7 @@ def tts_debug():
         resp = req_lib.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
             headers={"xi-api-key": key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
-            json={"text": "Hello.", "model_id": "eleven_monolingual_v1",
+            json={"text": "Hello.", "model_id": "eleven_turbo_v2",
                   "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}},
             timeout=15,
         )
