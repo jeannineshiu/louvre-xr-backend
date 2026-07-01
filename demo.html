@@ -445,6 +445,16 @@ function toggleMic() {
       if (!t) return;
       stopSpeaking();
       addMsg('user', t);
+
+      // Run same navigation detection as submitQuestion()
+      if (isNavQuestion(t) && currentExhibit) {
+        const fromId = exhibitNameToId(currentExhibit);
+        const toId   = parseNavDestination(t);
+        if (fromId && toId && fromId !== toId) {
+          callNavigation(fromId, toId, t);
+          return;
+        }
+      }
       callAPI(t, false);
     }
   };
