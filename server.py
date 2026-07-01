@@ -194,7 +194,11 @@ def tts_debug():
                 "http_status": resp.status_code,
                 "voice_id": voice,
                 "key_prefix": key[:8] + "...",
-                "response_bytes": len(resp.content)}
+                "key_length": len(key),
+                "key_has_spaces": " " in key,
+                "key_has_newline": "\n" in key or "\r" in key,
+                "response_bytes": len(resp.content),
+                "elevenlabs_error": resp.text if resp.status_code != 200 else "ok"}
     except Exception as e:
         return {"status": "error", "reason": str(e)}
 
