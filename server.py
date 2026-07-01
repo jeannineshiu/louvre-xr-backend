@@ -11,14 +11,17 @@ Usage:
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 from typing import Literal
 
+from pathlib import Path
+
 from rag_engine import RAGEngine
 from navigation_routes import ROUTES, EXHIBIT_NAMES
+from tts import generate_sophie_audio
 import qa_pipeline
 
 # RAGEngine singleton — loaded once at startup, shared across requests
@@ -49,6 +52,7 @@ class AskRequest(BaseModel):
     state:        AskStateInput | None    = None  # omit to skip context routing
     mode:         str | None             = None  # GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
     history:      list[HistoryMessage] | None = None  # prior turns: [{role, content}, ...]
+    voice:        bool                   = False  # if True, generate ElevenLabs TTS and return audio_url
 
     @field_validator("question")
     @classmethod
@@ -59,9 +63,10 @@ class AskRequest(BaseModel):
 
 
 class AskResponse(BaseModel):
-    mode:    str   # NO_RESPONSE | BRIEF_TEXT | GLANCE_CARD | FULL_VOICE | BRIEF_TEXT_PROMPT
-    answer:  str   # text answer; empty for NO_RESPONSE
-    exhibit: str   # recognised exhibit name; empty if not identified
+    mode:      str        # NO_RESPONSE | BRIEF_TEXT | GLANCE_CARD | FULL_VOICE | BRIEF_TEXT_PROMPT
+    answer:    str        # text answer; empty for NO_RESPONSE
+    exhibit:   str        # recognised exhibit name; empty if not identified
+    audio_url: str | None = None  # ElevenLabs TTS mp3 URL; only present when request voice=True
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +95,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 @app.post("/ask", response_model=AskResponse)
-def ask(req: AskRequest):
+def ask(req: AskRequest, request: Request):
     """
     QA endpoint. Three usage patterns:
 
@@ -121,10 +126,19 @@ def ask(req: AskRequest):
         history=[m.model_dump() for m in req.history] if req.history else None,
     )
 
+    # Optional ElevenLabs TTS — only when voice=True and there is an answer
+    audio_url: str | None = None
+    if req.voice and result["answer"]:
+        file_id = generate_sophie_audio(result["answer"])
+        if file_id:
+            base = str(request.base_url).rstrip("/")
+            audio_url = f"{base}/audio/{file_id}"
+
     return AskResponse(
         mode=result["mode"],
         answer=result["answer"],
         exhibit=result["exhibit"],
+        audio_url=audio_url,
     )
 
 
@@ -144,6 +158,15 @@ def navigate(from_exhibit: str, to_exhibit: str):
         "from_name":  EXHIBIT_NAMES.get(from_exhibit, from_exhibit),
         "to_name":    EXHIBIT_NAMES.get(to_exhibit, to_exhibit),
     }
+
+
+@app.get("/audio/{file_id}")
+def audio(file_id: str):
+    """Serve a generated Sophie TTS mp3 file."""
+    path = Path("temp_audio") / f"{file_id}.mp3"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    return FileResponse(str(path), media_type="audio/mpeg")
 
 
 @app.get("/demo")
