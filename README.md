@@ -155,6 +155,7 @@ Open this URL in a phone browser to use the full voice interface.
 | 🏛 Exhibit badge | Shows the identified sculpture name. Tap **Wrong?** to clear a misidentification without resetting the conversation. Tap **✕** for a full session reset. |
 | 🛍 Shop info | Ask "Where can I buy a souvenir?" or "Is there a replica?" to surface real Louvre boutique products with prices and links. |
 | 🗺 Navigation | Ask "How do I get to the Venus de Milo?" or "Where is the Seated Scribe from here?" to get step-by-step walking directions with room numbers and estimated times. Covers all routes between the 8 main Louvre exhibits. |
+| 🌍 Multilingual | Ask in any language — Sophie detects it and responds in the same language. Voice input (STT) and voice output (TTS) also adapt to the visitor's language automatically. |
 
 ### Conversation flow
 
@@ -194,6 +195,26 @@ Open this URL in a phone browser to use the full voice interface.
 ### Shop & merchandise
 
 When a visitor asks about buying (e.g. *"Where can I buy this?"*, *"Is there a replica?"*, *"Any souvenirs?"*), the RAG retrieves the `shop` section from the knowledge base and surfaces real products from the [Louvre boutique](https://boutique.louvre.fr) with prices and direct URLs. Shop information is **only** surfaced on purchase-related questions — it does not appear in general answers.
+
+### Multilingual support
+
+Sophie responds in the visitor's language automatically. No language selection is needed.
+
+**How it works:**
+
+| Layer | Behaviour |
+|---|---|
+| STT (voice input) | `recognition.lang = ''` — browser auto-detects the spoken language |
+| Answer generation | All system prompts instruct GPT-4o to detect the question language and respond in it |
+| TTS (voice output) | The detected language is stored and used to select a matching device voice for playback |
+| Navigation keywords | Detected in English, French, German, Chinese, Japanese, and Spanish |
+
+**Tested languages:** English, French, German, Chinese (Mandarin), Japanese, Spanish
+
+**Known limitations:**
+- Navigation directions from the lookup table (`navigation_routes.py`) are pre-written in English. Visitors receive English room names and wing names regardless of language. The surrounding sentence may be in their language, but room identifiers (e.g. *"Room 635, Sully wing, Level 1"*) are always English.
+- UI system messages (badge text, error prompts, "which sculpture" clarification) remain in English.
+- Sophie's TTS voice (`nova`) is optimised for English. Other languages are intelligible but may have a slight accent.
 
 ---
 
