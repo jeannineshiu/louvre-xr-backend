@@ -329,6 +329,7 @@ let imageB64       = null;
 let currentExhibit = '';
 let isListening    = false;
 let isSpeaking     = false;
+let detectedLang   = 'en-US';  // updated by STT; used for TTS language matching
 let recognition    = null;
 let busy           = false;
 
@@ -420,7 +421,7 @@ function toggleMic() {
   if (isListening) { recognition?.stop(); return; }
 
   recognition = new SR();
-  recognition.lang = 'en-US';
+  recognition.lang = '';  // auto-detect visitor's language
   recognition.continuous = false;
   recognition.interimResults = true; // needed on iOS Safari to get any results
 
@@ -443,6 +444,8 @@ function toggleMic() {
       const t = final[0].transcript.trim();
       if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
       if (!t) return;
+      // Capture detected language for TTS matching
+      if (final[0].lang) detectedLang = final[0].lang;
       stopSpeaking();
       addMsg('user', t);
 
@@ -505,11 +508,20 @@ function speak(text) {
   if (!text) return;
   stopSpeaking();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = 'en-US'; utt.rate = 0.92; utt.pitch = 1.0;
+  utt.lang = detectedLang || 'en-US'; utt.rate = 0.92; utt.pitch = 1.0;
 
-  const voices = speechSynthesis.getVoices();
-  const pick = voices.find(v => v.lang.startsWith('en') &&
-    /Natural|Neural|Samantha|Daniel|Karen|Moira/.test(v.name))
+  const voices  = speechSynthesis.getVoices();
+  const langCode = (detectedLang || 'en-US').split('-')[0]; // e.g. 'de' from 'de-DE'
+
+  // 1. Prefer a high-quality voice matching the detected language
+  const pick = voices.find(v => v.lang.startsWith(langCode) &&
+                  /Natural|Neural|Premium/.test(v.name))
+    // 2. Any voice matching the language
+    || voices.find(v => v.lang.startsWith(langCode))
+    // 3. Fallback: high-quality English voice
+    || voices.find(v => v.lang.startsWith('en') &&
+         /Natural|Neural|Samantha|Daniel|Karen|Moira/.test(v.name))
+    // 4. Any English voice
     || voices.find(v => v.lang.startsWith('en'));
   if (pick) utt.voice = pick;
 
@@ -691,16 +703,31 @@ async function submitQuestion() {
 
 // ── Navigation detection ──────────────────────────────────────────────────────
 const NAV_KEYWORDS = [
+  // English
   'how do i get', 'how to get', 'how do i reach', 'how to reach',
   'how do i walk', 'directions to', 'direction to',
   'where is the', 'where can i find', 'how far is',
   'walk to', 'navigate to', 'route to', 'way to',
   'how long to walk', 'how to find', 'how do i find',
   'get from', 'go to the', 'get to the',
-  // natural spoken variants
   'guide me to', 'take me to', 'lead me to', 'show me the way',
   'how do i visit', 'how to visit', 'i want to go to',
   'can you take me', 'can you guide', 'find the way to',
+  // French
+  'comment aller', 'comment rejoindre', 'où est', 'où se trouve',
+  'comment me rendre', 'chemin vers', 'direction vers', 'aller à',
+  'emmène-moi', 'conduis-moi', 'montre-moi le chemin',
+  // German
+  'wie komme ich', 'wie erreiche ich', 'wo ist', 'wo finde ich',
+  'wie gehe ich', 'weg zu', 'richtung zu', 'führe mich',
+  'bring mich', 'zeig mir den weg',
+  // Chinese (Mandarin)
+  '怎麼走', '怎么走', '如何前往', '在哪裡', '在哪里',
+  '怎麼去', '怎么去', '帶我去', '带我去', '路線', '路线',
+  // Japanese
+  'どうやって行く', 'どこですか', 'への道', 'に行きたい',
+  // Spanish
+  'cómo llego', 'dónde está', 'cómo ir', 'llévame a', 'camino a',
 ];
 function isNavQuestion(q) {
   const lower = q.toLowerCase();

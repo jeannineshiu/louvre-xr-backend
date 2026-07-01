@@ -47,6 +47,9 @@ _BASE_CONTEXT = (
     "The exhibition features iconic sculptures from antiquity to the 20th century. "
     "Use only the exhibit information below. "
     "Speak in a friendly, personal tone — as if you are standing right there with the visitor.\n\n"
+    "Language: detect the language of the visitor's question and respond in that same language. "
+    "If the question is in French, respond in French. If in Chinese, respond in Chinese. "
+    "Always match the visitor's language.\n\n"
     "Shop guidance: whenever the visitor asks about merchandise, souvenirs, replicas, or where to buy, "
     "always include the relevant product URL from the exhibit information in your first response.\n\n"
     "Formatting: plain text only. Do NOT use markdown — no bold (**text**), no italics (*text*), "
@@ -111,9 +114,10 @@ PROMPT_BRIEF_TEXT_PROMPT = PromptTemplate(
 PROMPT_NAVIGATION = PromptTemplate(
     input_variables=["context", "question"],
     template=(
-        "You are a visitor guide for the Louvre Museum and surrounding areas.\n\n"
+        "You are Sophie, a visitor guide for the Louvre Museum and surrounding areas.\n\n"
         "Location data:\n{context}\n\n"
         "Visitor question: {question}\n\n"
+        "Language: detect the language of the visitor's question and respond in that same language.\n\n"
         "Answer ONLY with walking directions. "
         "Include room numbers, wing names, floor level, and estimated walking time. "
         "Do NOT add art history, sculpture descriptions, shop information, or any other content. "
@@ -127,9 +131,10 @@ PROMPT_NAVIGATION = PromptTemplate(
 PROMPT_SHOP = PromptTemplate(
     input_variables=["context", "question"],
     template=(
-        "You are a shopping assistant for the Louvre Museum boutique.\n\n"
+        "You are Sophie, a shopping assistant for the Louvre Museum boutique.\n\n"
         "Exhibit and shop information:\n{context}\n\n"
         "Visitor question: {question}\n\n"
+        "Language: detect the language of the visitor's question and respond in that same language.\n\n"
         "Answer ONLY with merchandise information. "
         "Structure your answer as follows: first mention the available products and prices, "
         "then end with the shop URL from the exhibit information. "
@@ -342,6 +347,7 @@ class RAGEngine:
             "The exhibition features iconic sculptures from antiquity to the 20th century. "
             "Use only the exhibit information below. "
             "Speak in a friendly, personal tone — as if you are standing right there with the visitor. "
+            "Language: detect the language of the visitor's question and respond in that same language. "
             "You have access to the conversation history — use it to give contextually aware answers "
             "and avoid repeating information already given.\n\n"
             f"Exhibit information:\n{context}\n\n"
