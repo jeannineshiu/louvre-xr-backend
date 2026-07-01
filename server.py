@@ -174,6 +174,31 @@ def demo():
     return FileResponse("demo.html", media_type="text/html")
 
 
+@app.get("/tts-debug")
+def tts_debug():
+    """Temporary: test ElevenLabs connection and report status."""
+    import os, requests as req_lib
+    key     = os.environ.get("ELEVENLABS_API_KEY", "")
+    voice   = os.environ.get("SOPHIE_VOICE_ID", "")
+    if not key:
+        return {"status": "error", "reason": "ELEVENLABS_API_KEY not set"}
+    try:
+        resp = req_lib.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
+            headers={"xi-api-key": key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+            json={"text": "Hello.", "model_id": "eleven_monolingual_v1",
+                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}},
+            timeout=15,
+        )
+        return {"status": "ok" if resp.status_code == 200 else "error",
+                "http_status": resp.status_code,
+                "voice_id": voice,
+                "key_prefix": key[:8] + "...",
+                "response_bytes": len(resp.content)}
+    except Exception as e:
+        return {"status": "error", "reason": str(e)}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
