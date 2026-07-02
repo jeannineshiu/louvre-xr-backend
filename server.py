@@ -114,9 +114,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ContextAR", version="0.2.0", lifespan=lifespan)
 
+# Explicit allow-list — the production WebXR front end plus local dev origins.
+# Using explicit origins (not "*") so credentialed requests keep working.
+ALLOWED_ORIGINS = [
+    "https://webxr-worldmodels.vercel.app",  # production front end
+    "http://localhost:3000",                 # local dev (Next.js / Vite default)
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
