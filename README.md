@@ -530,6 +530,8 @@ Returns the browser demo page (`demo.html`). Open in a phone browser for the ful
 |---|---|---|---|
 | `question` | `string` | Yes | Visitor's natural-language question. Must be non-empty — returns 422 if blank. |
 | `image_base64` | `string` | No | Base64 JPEG/PNG; omit to skip recognition |
+| `exhibit` | `string` | No | The exhibit the visitor is currently facing, as an id (`hommage_a_cezanne_maillol`) or display name (`L'Hommage à Cézanne`). Set this when the frontend already knows the exhibit — e.g. a preset WebXR splat — so Sophie answers about the right work without a camera scan. Image recognition, if provided and successful, takes priority. |
+| `splat` | `string` | No | The identifier of the currently displayed Gaussian splat — a filename, URL, slug, or short name. The backend identifies which exhibit it is (see [Splat identification](#splat-identification)). Use this when the frontend has a splat identifier but not the backend exhibit id. `exhibit` takes priority if both are sent. |
 | `state` | `object` | No | Sensor state; omit to skip context routing |
 | `state.crowd` | `"low"` \| `"crowded"` | No | Default: `"low"` |
 | `state.noise` | `"quiet"` \| `"noisy"` | No | Default: `"quiet"` |
@@ -611,6 +613,51 @@ const resp = await fetch(`${BASE_URL}/transcribe`, { method: 'POST', body: form 
 const { text } = await resp.json();
 // then send `text` to POST /ask
 ```
+
+---
+
+### Splat identification
+
+The [WebXR scene](https://webxr-worldmodels.vercel.app) simulates the **Jardin des Tuileries** and contains exactly three Gaussian-splat sculptures, all by **Aristide Maillol**:
+
+| Splat | Exhibit id | Notes |
+|---|---|---|
+| Air | `air_maillol` | **Default splat** shown on load |
+| La Nuit (Night) | `la_nuit_maillol` | |
+| L'Hommage à Cézanne | `hommage_a_cezanne_maillol` | |
+
+When a visitor asks a question, the frontend sends the current splat's identifier as the `splat` field on `POST /ask`, and the backend identifies which exhibit it is — so *"What is the statue in front of me?"* resolves to the correct work without a camera scan.
+
+**Why this exists:** without it, a question with no visual cues ("What is this?") makes the RAG guess from the question text alone, which returns the wrong sculpture.
+
+**What the frontend can send** — the resolver is deliberately forgiving. All of these resolve to `Air` (the default splat):
+
+| `splat` value | Resolves to |
+|---|---|
+| `air_maillol` (exhibit id) | Air |
+| `Air` (display name) | Air |
+| `https://.../splats/air.splat` (URL) | Air |
+| `air_2024.ply` (filename) | Air |
+| `air` (slug) | Air |
+
+Matching ignores case, accents, and punctuation; strips URL paths and splat extensions (`.splat` / `.ply` / `.ksplat` / `.spz`); and every exhibit id and display name is accepted automatically. Unrecognised identifiers resolve to nothing (the question is answered without an anchored exhibit) rather than erroring.
+
+**Mapping is editable** in `splat_mapping.json` — the three Tuileries splats are configured there with aliases. To wire a real splat filename that doesn't already contain the sculpture's name, add `"your_splat_filename": "exhibit_id"`. No code change or redeploy of logic needed. See `splat_registry.py` for the resolver.
+
+#### `GET /splats`
+
+Registry helper for debugging the frontend integration.
+
+```bash
+# Resolve a single identifier
+curl "<BASE_URL>/splats?value=cezanne_v2.splat"
+# → { "value": "cezanne_v2.splat", "exhibit": "L'Hommage à Cézanne", "recognized": true }
+
+# Full alias → exhibit-name mapping
+curl "<BASE_URL>/splats"
+```
+
+Use `GET /splats?value=<what your frontend sends>` to confirm a splat identifier resolves before wiring it into `/ask`.
 
 ---
 

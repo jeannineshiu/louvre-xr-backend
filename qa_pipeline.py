@@ -36,12 +36,13 @@ DEFAULT_MODE = "FULL_VOICE"
 
 
 def run(
-    question:  str,
-    image_b64: str | None,
-    rag:       RAGEngine,
-    api_state: dict | None  = None,
-    mode:      str | None   = None,
-    history:   list[dict] | None = None,
+    question:      str,
+    image_b64:     str | None,
+    rag:           RAGEngine,
+    api_state:     dict | None  = None,
+    mode:          str | None   = None,
+    history:       list[dict] | None = None,
+    known_exhibit: str | None   = None,
 ) -> dict:
     """
     Full QA pipeline. No hardware access — everything is passed in.
@@ -58,6 +59,9 @@ def run(
         api_state: Unity sensor state: {"crowd": str, "noise": str, "gaze_duration": float}
         mode:      Direct mode override.
                    One of: GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
+        known_exhibit: Exhibit name the frontend already knows the visitor is facing
+                   (e.g. a preset WebXR splat). Used to anchor the answer when no
+                   image is sent or recognition fails. Image recognition takes priority.
 
     Returns:
         {
@@ -66,10 +70,15 @@ def run(
             "exhibit": str,
         }
     """
-    # Step 1: Identify exhibit from camera frame (optional)
+    # Step 1: Identify the exhibit.
+    # If the frontend already knows which sculpture the visitor is facing
+    # (e.g. a preset WebXR splat → exhibit), use it directly and skip the
+    # GPT-4o Vision call. Otherwise fall back to recognising it from the frame.
     exhibit_name = ""
     image_scanned = False  # True when an image was provided (regardless of recognition result)
-    if image_b64:
+    if known_exhibit:
+        exhibit_name = known_exhibit
+    elif image_b64:
         frame = _b64_to_frame(image_b64)
         if frame is not None:
             image_scanned = True
@@ -81,8 +90,9 @@ def run(
             ):
                 exhibit_name = recognition["name"]
 
-    # If an image was scanned but not matched to any of the recognised sculptures,
-    # return a clear explanation instead of letting the RAG guess.
+    # If an image was scanned but not matched to any of the recognised sculptures
+    # (and the frontend didn't tell us which exhibit it is), return a clear
+    # explanation instead of letting the RAG guess.
     if image_scanned and not exhibit_name:
         return {
             "mode":    mode or DEFAULT_MODE,

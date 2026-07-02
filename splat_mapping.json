@@ -1,0 +1,21 @@
+{
+  "_comment": "WebXR scene = Jardin des Tuileries (webxr-worldmodels.vercel.app). It has exactly THREE Gaussian-splat sculptures, all by Aristide Maillol: Air (the default splat on load), La Nuit, and L'Hommage à Cézanne. Sophie only needs to identify these three here. The frontend sends the current splat's identifier (filename, URL, slug, or short name) as the `splat` field on POST /ask; the backend maps it to an exhibit id below. Matching is case-, accent-, and punctuation-insensitive, ignores URL paths and splat extensions (.splat/.ply/.ksplat/.spz), and every exhibit id + display name is ALSO accepted automatically. To wire a real splat filename, add \"my_splat_filename\": \"exhibit_id\". (Other Louvre exhibits still resolve by id/name for the camera-scan flow, but are not part of this scene.)",
+  "scene": "Jardin des Tuileries",
+  "default_splat": "air_maillol",
+  "aliases": {
+    "air": "air_maillol",
+    "air maillol": "air_maillol",
+    "maillol air": "air_maillol",
+
+    "la nuit": "la_nuit_maillol",
+    "nuit": "la_nuit_maillol",
+    "night": "la_nuit_maillol",
+    "la nuit night": "la_nuit_maillol",
+    "la nuit maillol": "la_nuit_maillol",
+
+    "hommage a cezanne": "hommage_a_cezanne_maillol",
+    "hommage cezanne": "hommage_a_cezanne_maillol",
+    "hommage": "hommage_a_cezanne_maillol",
+    "cezanne": "hommage_a_cezanne_maillol"
+  }
+}

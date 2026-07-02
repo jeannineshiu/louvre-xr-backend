@@ -26,8 +26,22 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from rag_engine import RAGEngine
 from navigation_routes import ROUTES, EXHIBIT_NAMES
+from exhibits_data import EXHIBITS
+from splat_registry import resolve_splat, list_mapping
 from tts import generate_sophie_audio
 import qa_pipeline
+
+# Map exhibit id → display name so the frontend can send either form in `exhibit`
+_EXHIBIT_ID_TO_NAME = {e["id"]: e["name"] for e in EXHIBITS}
+
+
+def _resolve_exhibit(value: str | None) -> str | None:
+    """Normalise a caller-supplied exhibit id or name to the canonical display name.
+    Returns None for empty input; passes through unknown strings unchanged."""
+    if not value or not value.strip():
+        return None
+    v = value.strip()
+    return _EXHIBIT_ID_TO_NAME.get(v, v)
 
 # RAGEngine singleton — loaded once at startup, shared across requests
 _rag: RAGEngine | None = None
@@ -71,6 +85,14 @@ class AskRequest(BaseModel):
     # Multiplayer room context — lets Sophie address the group / the asker
     asker_name:   str | None             = None  # who is asking, e.g. "Alice"
     participants: list[str] | None       = None  # everyone in the room, e.g. ["Alice", "Bob", "Charlie"]
+    # Known exhibit — set by the frontend when the current exhibit/splat is already
+    # known (e.g. a preset WebXR splat), so recognition can be skipped. Accepts an
+    # exhibit id ("hommage_a_cezanne_maillol") or display name ("L'Hommage à Cézanne").
+    exhibit:      str | None             = None
+    # Splat identifier — the frontend sends whatever it has for the current splat
+    # (filename, URL, slug, or short name); the backend identifies the exhibit.
+    # See splat_registry.py / splat_mapping.json.
+    splat:        str | None             = None
 
     @field_validator("question")
     @classmethod
@@ -180,6 +202,8 @@ def ask(req: AskRequest, request: Request):
         mode=req.mode,
         rag=_rag,
         history=[m.model_dump() for m in req.history] if req.history else None,
+        # Prefer an explicit exhibit id/name; otherwise identify the exhibit from the splat.
+        known_exhibit=_resolve_exhibit(req.exhibit) or resolve_splat(req.splat),
     )
 
     # Optional ElevenLabs TTS — only when voice=True and there is an answer
@@ -309,6 +333,21 @@ def tts_debug():
         return {"status": "ok", "voice": SOPHIE_VOICE,
                 "file_id": file_id, "audio_url": f"/audio/{file_id}"}
     return {"status": "error", "reason": "TTS generation failed — check Railway logs"}
+
+
+@app.get("/splats")
+def splats(value: str | None = None):
+    """
+    Splat → exhibit registry helper.
+
+    - GET /splats            → full alias → exhibit-name mapping (for debugging)
+    - GET /splats?value=...  → resolve a single splat identifier, e.g.
+                               /splats?value=cezanne_v2.splat
+    """
+    if value is not None:
+        resolved = resolve_splat(value)
+        return {"value": value, "exhibit": resolved, "recognized": resolved is not None}
+    return {"mapping": list_mapping()}
 
 
 @app.get("/health")
