@@ -23,19 +23,19 @@ from rag_engine import RAGEngine
 # Per-mode hard character caps (safety net — prompts already guide length)
 # GLANCE_CARD: ~20 words ≈ 120 chars → cap at 160
 # BRIEF_TEXT / BRIEF_TEXT_PROMPT: ~50–60 words ≈ 350 chars → cap at 450
-# FULL_VOICE: uncapped (prompt targets 120–150 words)
+# FULL_VOICE: ~100 words ≈ 700 chars → cap at 700
 MODE_MAX_LENGTH: dict[str, int | None] = {
     "GLANCE_CARD":        160,
     "BRIEF_TEXT":         450,
     "BRIEF_TEXT_PROMPT":  450,
-    "FULL_VOICE":         None,
+    "FULL_VOICE":         700,
     "NAVIGATION":         400,
     "SHOP":               600,
 }
 
 # Keep old names as aliases so nothing outside breaks if they were imported
 BRIEF_MAX = 450
-FULL_MAX  = None
+FULL_MAX  = 700
 
 GAZE_THRESHOLD_INTEREST = 5.0   # seconds — below this, visitor is passing by
 GAZE_THRESHOLD_ENGAGED  = 15.0  # seconds — above this, visitor is deeply engaged

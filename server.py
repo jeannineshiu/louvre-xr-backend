@@ -291,14 +291,14 @@ def session_start(req: SessionStartRequest, request: Request):
         prompt = (
             f"A group of visitors has just joined a shared WebXR tour room. "
             f"They are standing in front of '{req.exhibit}'. "
-            f"Greet them warmly as Sophie, their MuseXR guide, in 2–3 sentences. "
-            f"Welcome them, mention the sculpture by name, and invite them to ask you anything."
+            f"Greet them warmly as Sophie, their MuseXR guide, in ONE short sentence "
+            f"(maximum 20 words). Mention the sculpture by name and invite them to ask you anything."
         )
     else:
         prompt = (
             "A group of visitors has just joined a shared WebXR tour room at the Louvre Museum. "
-            "Greet them warmly as Sophie, their MuseXR guide, in 2–3 sentences. "
-            "Welcome them to the experience and invite them to point their camera at any sculpture "
+            "Greet them warmly as Sophie, their MuseXR guide, in ONE short sentence "
+            "(maximum 20 words). Invite them to point their camera at any sculpture "
             "or ask you anything about the collection."
         )
 

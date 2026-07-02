@@ -83,15 +83,15 @@ PROMPT_BRIEF_TEXT = PromptTemplate(
 )
 
 # FULL_VOICE — visitor is deeply engaged, >15 s gaze, low crowd
-# Target: full immersive guide, ~150 words, with historical context and story.
+# Target: full immersive guide, maximum 100 words, with historical context and story.
 PROMPT_FULL_VOICE = PromptTemplate(
     input_variables=["context", "question"],
     template=(
         _BASE_CONTEXT +
-        "Answer in 4–6 sentences (around 120–150 words). "
-        "Include: the direct answer to the question, relevant historical context, "
-        "an interesting story or surprising detail, and a closing thought that invites "
-        "the visitor to look more closely at the sculpture. Be warm and immersive.\n\n"
+        "Answer in 3–4 sentences (maximum 100 words). "
+        "Include: the direct answer to the question, one relevant historical detail or "
+        "story, and a closing thought that invites the visitor to look more closely at "
+        "the sculpture. Be warm and immersive, but concise.\n\n"
         "Answer:"
     ),
 )
@@ -168,10 +168,10 @@ _MODE_INSTRUCTIONS = {
         "Give the key fact and one interesting detail. Be clear and engaging."
     ),
     "FULL_VOICE": (
-        "Answer in 4–6 sentences (around 120–150 words). "
-        "Include: the direct answer to the question, relevant historical context, "
-        "an interesting story or surprising detail, and a closing thought that invites "
-        "the visitor to look more closely at the sculpture. Be warm and immersive."
+        "Answer in 3–4 sentences (maximum 100 words). "
+        "Include: the direct answer to the question, one relevant historical detail or "
+        "story, and a closing thought that invites the visitor to look more closely at "
+        "the sculpture. Be warm and immersive, but concise."
     ),
     "BRIEF_TEXT_PROMPT": (
         "Answer in 2–3 sentences (around 50 words). "
