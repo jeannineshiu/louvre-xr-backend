@@ -46,10 +46,14 @@ louvre-ar-backend/
 ├── exhibit_recognizer.py   # GPT-4o Vision: identify sculpture from camera frame
 ├── exhibits_data.py        # Museum knowledge base (12 sculptures: 8 main + 4 testing, 6 sections each)
 ├── navigation_routes.py    # Direct (from_id, to_id) route lookup table — 56 routes, no FAISS
+├── splat_registry.py       # Resolves a Gaussian-splat identifier to an exhibit (GET /splats)
+├── splat_mapping.json      # Editable splat → exhibit alias table used by splat_registry.py
+├── tts.py                  # Sophie's voice — OpenAI TTS, saves mp3s to temp_audio/
 │
 ├── faiss_index/            # Pre-built FAISS vector index (committed — no rebuild needed)
 │   ├── index.faiss
 │   └── index.pkl
+├── temp_audio/             # Generated Sophie TTS mp3s, served at GET /audio/{file_id}
 │
 ├── demo.html               # Browser demo — voice chat UI served at GET /demo
 ├── Dockerfile              # Container image for the FastAPI server
@@ -190,7 +194,7 @@ Open this URL in a phone browser to use the full voice interface.
 
 - Recognition only triggers when a photo is included in the request.
 - GPT-4o Vision requires **all** listed visual markers to be clearly visible before returning a sculpture name. Ambiguous or non-listed sculptures return `"unknown"`.
-- If the sculpture is not identified, the AI responds: *"I wasn't able to identify this sculpture as one of the nine works in my system"* and lists the available works — it does **not** guess.
+- If the sculpture is not identified, the AI returns an explicit message instead of guessing — see [If the image is unclear or not one of the recognised sculptures](#if-the-image-is-unclear-or-not-one-of-the-recognised-sculptures).
 
 ### Shop & merchandise
 
@@ -408,26 +412,6 @@ curl -X POST <BASE_URL>/ask \
 
 ---
 
-### Level 6 — Miles Franklin Statue (Hurstville field test)
-
-Use this to test the Sydney on-site exhibit before the Louvre trip. Works with or without a headset — use an image of the statue for Level 4-style recognition.
-
-```bash
-# Pure QA
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Tell me about the Miles Franklin statue", "mode": "FULL_VOICE"}'
-
-# With context router (simulate on-site engaged visitor)
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Who was Miles Franklin?", "state": {"crowd": "low", "noise": "quiet", "gaze_duration": 20.0}}'
-```
-
-Expected: `exhibit` field will be empty unless `image_base64` is included; answer will reference MacMahon Street, Hurstville, *My Brilliant Career*, and the Miles Franklin Literary Award.
-
----
-
 ### Using Swagger UI instead of curl
 
 Open `<BASE_URL>/docs` in any browser. Every field above is available as a form — no terminal needed. Useful for quick exploration on phone or tablet.
@@ -463,7 +447,7 @@ This pattern aligns perfectly with the context router: gaze under 5 seconds retu
 
 GPT-4o Vision returns `confidence: "low"` or `name: "unknown"`. The server then returns an explicit message to the visitor:
 
-> *"I wasn't able to identify this sculpture as one of the nine works in my system. I can tell you about: the Winged Victory of Samothrace, Venus de Milo, …"*
+> *"I wasn't able to identify this sculpture as one of the works in my system. I can tell you about: the Winged Victory of Samothrace, Venus de Milo, …"*
 
 The server does **not** guess or fall back to a random sculpture — it tells the visitor exactly which works it covers and asks them to try scanning again.
 
@@ -700,186 +684,6 @@ curl -X POST <BASE_URL>/session/start \
   "audio_url": "https://louvre-xr-backend-production.up.railway.app/audio/abc123-..."
 }
 ```
-
----
-
-## Unity / Quest Integration
-
-```csharp
-private const string BASE_URL = "<ask a team member for the URL>";
-
-IEnumerator AskServer(string question, float gazeDuration,
-                      string crowd, string noise)
-{
-    var body = new AskRequest
-    {
-        question = question,
-        state    = new AskState { crowd = crowd, noise = noise, gaze_duration = gazeDuration }
-    };
-
-    string json = JsonUtility.ToJson(body);
-    using var req = new UnityWebRequest($"{BASE_URL}/ask", "POST");
-    req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-    req.downloadHandler = new DownloadHandlerBuffer();
-    req.SetRequestHeader("Content-Type", "application/json");
-    yield return req.SendWebRequest();
-
-    if (req.result == UnityWebRequest.Result.Success)
-        HandleResponse(JsonUtility.FromJson<AskResponse>(req.downloadHandler.text));
-}
-
-void HandleResponse(AskResponse resp)
-{
-    switch (resp.mode)
-    {
-        case "NO_RESPONSE":       break;                          // visitor passing by
-        case "GLANCE_CARD":       ShowGlanceCard(resp.answer);   break;
-        case "BRIEF_TEXT":        ShowBriefText(resp.answer);    break;
-        case "FULL_VOICE":        ShowFullOverlay(resp.answer);  break;
-        case "BRIEF_TEXT_PROMPT": ShowBriefText(resp.answer);    break;
-    }
-}
-```
-
-```csharp
-[Serializable] public class AskState    { public string crowd; public string noise; public float gaze_duration; }
-[Serializable] public class AskRequest  { public string question; public string image_base64; public AskState state; public HistoryMessage[] history; }
-[Serializable] public class AskResponse { public string mode; public string answer; public string exhibit; }
-[Serializable] public class HistoryMessage { public string role; public string content; }
-```
-
-### Navigation — `GET /navigate` ⚠️ Required change
-
-Navigation questions must now call `GET /navigate` directly — they will **not** work correctly via `POST /ask` because navigation data is no longer stored in the FAISS index.
-
-**Step 1 — Data structures**
-
-```csharp
-// Map the exhibit name returned by the API to its route ID
-private static readonly Dictionary<string, string> ExhibitIds = new()
-{
-    { "Winged Victory of Samothrace",          "winged_victory_of_samothrace" },
-    { "Venus de Milo",                         "venus_de_milo"                },
-    { "Cupid and Psyche",                      "cupid_and_psyche"             },
-    { "The Borghese Gladiator",                "borghese_gladiator"           },
-    { "The Dying Slave",                       "the_dying_slave"              },
-    { "The Seated Scribe (The Crouching Scribe)", "the_crouching_scribe"      },
-    { "Bastet Cat Statue",                     "bastet_cat_statue"            },
-    { "La Siesta",                             "la_siesta_foyatier"           },
-};
-
-// Keywords that indicate a navigation question
-private static readonly string[] NavKeywords =
-{
-    "how do i get", "how to get", "how do i reach", "how to reach",
-    "directions to", "direction to", "where is the", "walk to",
-    "how far is", "route to", "how do i find", "get to the",
-};
-
-// Keywords that identify each destination exhibit
-private static readonly (string id, string[] keywords)[] ExhibitKeywords =
-{
-    ("winged_victory_of_samothrace", new[]{ "winged victory", "samothrace", "nike", "daru" }),
-    ("venus_de_milo",                new[]{ "venus de milo", "venus", "aphrodite", "milo" }),
-    ("cupid_and_psyche",             new[]{ "cupid and psyche", "cupid", "psyche", "canova" }),
-    ("borghese_gladiator",           new[]{ "borghese gladiator", "borghese", "gladiator" }),
-    ("the_dying_slave",              new[]{ "dying slave", "slave" }),
-    ("the_crouching_scribe",         new[]{ "seated scribe", "crouching scribe", "scribe" }),
-    ("bastet_cat_statue",            new[]{ "bastet", "cat statue", "egyptian cat" }),
-    ("la_siesta_foyatier",           new[]{ "la siesta", "siesta", "foyatier" }),
-};
-
-[Serializable] public class NavigateResponse
-{
-    public bool   found;
-    public string directions;
-    public string from_name;
-    public string to_name;
-}
-```
-
-**Step 2 — Helper methods**
-
-```csharp
-private string _currentExhibitId = "";
-
-// Call this immediately after a successful recognition response
-void OnExhibitRecognised(string exhibitName)
-{
-    if (ExhibitIds.TryGetValue(exhibitName, out var id))
-        _currentExhibitId = id;
-}
-
-// Returns true if the visitor's question is asking for directions
-bool IsNavigationQuestion(string question)
-{
-    var lower = question.ToLower();
-    foreach (var kw in NavKeywords)
-        if (lower.Contains(kw)) return true;
-    return false;
-}
-
-// Tries to extract the destination exhibit from the question text
-// Returns null if the destination cannot be determined
-string ParseDestinationId(string question)
-{
-    var lower = question.ToLower();
-    foreach (var (id, keywords) in ExhibitKeywords)
-        foreach (var kw in keywords)
-            if (lower.Contains(kw)) return id;
-    return null;
-}
-```
-
-**Step 3 — Navigation coroutine**
-
-```csharp
-IEnumerator NavigateTo(string toExhibitId, string originalQuestion)
-{
-    string url = $"{BASE_URL}/navigate" +
-                 $"?from_exhibit={_currentExhibitId}&to_exhibit={toExhibitId}";
-    using var req = UnityWebRequest.Get(url);
-    yield return req.SendWebRequest();
-
-    if (req.result == UnityWebRequest.Result.Success)
-    {
-        var resp = JsonUtility.FromJson<NavigateResponse>(req.downloadHandler.text);
-        if (resp.found)
-        {
-            ShowDirections(resp.directions);   // display/speak the directions
-            return;
-        }
-    }
-    // Fallback: route not found — send to /ask as a normal question
-    yield return AskServer(originalQuestion, 0f, "low", "quiet");
-}
-```
-
-**Step 4 — Integrate into your main ask flow**
-
-Replace your current `AskServer()` call with this dispatcher:
-
-```csharp
-IEnumerator AskOrNavigate(string question, float gazeDuration, string crowd, string noise)
-{
-    // If it's a navigation question and we know which exhibit we're at,
-    // try the direct route lookup first
-    if (IsNavigationQuestion(question) && !string.IsNullOrEmpty(_currentExhibitId))
-    {
-        string toId = ParseDestinationId(question);
-        if (toId != null && toId != _currentExhibitId)
-        {
-            yield return NavigateTo(toId, question);
-            yield break;
-        }
-    }
-
-    // Everything else goes to /ask as before
-    yield return AskServer(question, gazeDuration, crowd, noise);
-}
-```
-
-Call `AskOrNavigate()` everywhere you previously called `AskServer()` for visitor questions.
 
 ---
 
