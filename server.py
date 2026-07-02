@@ -9,9 +9,10 @@ Usage:
     uvicorn server:app --reload
 """
 
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
@@ -19,6 +20,7 @@ from typing import Literal
 
 from pathlib import Path
 
+from openai import OpenAI
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -29,6 +31,16 @@ import qa_pipeline
 
 # RAGEngine singleton — loaded once at startup, shared across requests
 _rag: RAGEngine | None = None
+
+# OpenAI client singleton — lazily created, reused across requests (Whisper transcription)
+_openai_client: OpenAI | None = None
+
+
+def _get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    return _openai_client
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +68,9 @@ class AskRequest(BaseModel):
     mode:         str | None             = None  # GLANCE_CARD | BRIEF_TEXT | FULL_VOICE | BRIEF_TEXT_PROMPT
     history:      list[HistoryMessage] | None = None  # prior turns: [{role, content}, ...]
     voice:        bool                   = False  # if True, generate ElevenLabs TTS and return audio_url
+    # Multiplayer room context — lets Sophie address the group / the asker
+    asker_name:   str | None             = None  # who is asking, e.g. "Alice"
+    participants: list[str] | None       = None  # everyone in the room, e.g. ["Alice", "Bob", "Charlie"]
 
     @field_validator("question")
     @classmethod
@@ -80,6 +95,10 @@ class SessionStartRequest(BaseModel):
 class SessionStartResponse(BaseModel):
     greeting:  str
     audio_url: str | None = None
+
+
+class TranscribeResponse(BaseModel):
+    text: str  # transcribed speech; empty string on failure
 
 
 # ---------------------------------------------------------------------------
@@ -130,8 +149,20 @@ def ask(req: AskRequest, request: Request):
             detail=f"Invalid mode '{req.mode}'. Choose from: {sorted(VALID_MODES)}",
         )
 
+    # Multiplayer room context — prepend so Sophie can address the group and the asker
+    question = req.question
+    if req.participants and req.asker_name:
+        names = ", ".join(req.participants)
+        count = len(req.participants)
+        person = "person" if count == 1 else "people"
+        question = (
+            f"[Room context: {count} {person} in this room — {names}. "
+            f"This question is from {req.asker_name}.]\n"
+            f"Question: {req.question}"
+        )
+
     result = qa_pipeline.run(
-        question=req.question,
+        question=question,
         image_b64=req.image_base64,
         api_state=req.state.model_dump() if req.state else None,
         mode=req.mode,
@@ -153,6 +184,30 @@ def ask(req: AskRequest, request: Request):
         exhibit=result["exhibit"],
         audio_url=audio_url,
     )
+
+
+@app.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe(file: UploadFile = File(...)):
+    """
+    Speech-to-text for multiplayer VR voice questions.
+
+    The front end records audio via MediaRecorder (webm or mp4) and posts it here
+    as multipart/form-data. The audio is sent straight to OpenAI Whisper.
+
+    On any failure we return {"text": ""} (HTTP 200) rather than a 500, so the
+    caller can degrade gracefully instead of surfacing an error to the visitor.
+    """
+    try:
+        content = await file.read()
+        if not content:
+            return TranscribeResponse(text="")
+        result = _get_openai_client().audio.transcriptions.create(
+            model="whisper-1",
+            file=(file.filename or "audio.webm", content),
+        )
+        return TranscribeResponse(text=(result.text or "").strip())
+    except Exception:  # noqa: BLE001 — degrade to empty text instead of 500
+        return TranscribeResponse(text="")
 
 
 @app.get("/navigate")
