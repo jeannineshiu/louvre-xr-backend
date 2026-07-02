@@ -933,6 +933,7 @@ Browser requests are restricted to an explicit origin allow-list (set in `server
 |---|---|
 | `https://webxr-worldmodels.vercel.app` | Production WebXR front end |
 | `http://localhost:3000`, `http://localhost:5173` (and `127.0.0.1`) | Local frontend development |
+| `https://localhost:8081` | Local HTTPS dev server (e.g. WebXR — HTTPS required for camera/mic) |
 
 All methods and headers are allowed, so `application/json` and `multipart/form-data` (used by `/transcribe`) both work. Credentialed requests are enabled (`allow_credentials=True`). If you deploy the frontend to a new origin (e.g. a Vercel preview URL), add it to `ALLOWED_ORIGINS` in `server.py`. Native Unity/Quest clients are not subject to CORS.
 

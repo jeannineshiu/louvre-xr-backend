@@ -120,6 +120,7 @@ ALLOWED_ORIGINS = [
     "https://webxr-worldmodels.vercel.app",  # production front end
     "http://localhost:3000",                 # local dev (Next.js / Vite default)
     "http://localhost:5173",
+    "https://localhost:8081",                # local dev (HTTPS, e.g. WebXR dev server)
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
