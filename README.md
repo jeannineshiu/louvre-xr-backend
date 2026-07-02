@@ -537,8 +537,35 @@ Returns the browser demo page (`demo.html`). Open in a phone browser for the ful
 | `mode` | `string` | No | Direct mode override — takes priority over `state` |
 | `history` | `array of {role, content}` | No | Prior conversation turns. `role` must be `"user"` or `"assistant"` — returns 422 otherwise. See [Conversation History](#conversation-history). |
 | `voice` | `boolean` | No | Default: `false`. If `true`, generates a Sophie TTS audio file and returns `audio_url`. Use for multi-user broadcast via Netblocks. |
+| `asker_name` | `string` | No | Name of the person asking, e.g. `"Alice"`. Used with `participants` for multi-user rooms. See [Room context](#room-context--multi-user-qa). |
+| `participants` | `array of string` | No | Everyone currently in the room, e.g. `["Alice", "Bob", "Charlie"]`. Used with `asker_name`. |
 
 **Priority:** `mode` (if set) → `state` (if set) → default `FULL_VOICE`
+
+#### Room context — multi-user Q&A
+
+When **both** `asker_name` and `participants` are provided, the server prepends a context line to the question before sending it to GPT-4o, so Sophie knows who is in the room and who is asking. This lets her address the group ("Great question, Alice — for everyone here…") instead of a single anonymous visitor.
+
+The question sent to the model becomes:
+
+```
+[Room context: 3 people in this room — Alice, Bob, Charlie. This question is from Alice.]
+Question: Tell me about the Winged Victory
+```
+
+Both fields are optional and independent of `voice`, `mode`, and `state`. If either is omitted, the question is passed through unchanged (fully backward compatible — existing Quest and demo clients are unaffected).
+
+```bash
+curl -X POST <BASE_URL>/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Tell me about the Winged Victory",
+    "mode": "FULL_VOICE",
+    "voice": true,
+    "asker_name": "Alice",
+    "participants": ["Alice", "Bob", "Charlie"]
+  }'
+```
 
 ### `POST /ask` — response fields
 
@@ -548,6 +575,42 @@ Returns the browser demo page (`demo.html`). Open in a phone browser for the ful
 | `answer` | Text answer; empty string when `mode` is `NO_RESPONSE` |
 | `exhibit` | Recognised sculpture name; empty string if not identified |
 | `audio_url` | Full HTTPS URL of the generated mp3 file. Only present when `voice: true`. All room members can fetch this URL directly. |
+
+---
+
+### `POST /transcribe`
+
+Speech-to-text for voice questions. The frontend records audio with `MediaRecorder` and posts the blob here; the server sends it straight to **OpenAI Whisper** (`whisper-1`) and returns the transcript. Designed for the multi-user WebXR flow, where the browser cannot always use the native Web Speech API.
+
+**Request:** `multipart/form-data`
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `file` | file (audio blob) | Yes | Recorded audio — `webm` or `mp4`/`m4a`. Sent as-is to Whisper. |
+
+**Response:**
+
+```json
+{ "text": "Tell me about the Winged Victory" }
+```
+
+**Failure handling:** on any error (invalid audio, empty file, Whisper API failure) the endpoint returns `{"text": ""}` with HTTP **200** — never a 500 — so the frontend can degrade gracefully instead of surfacing an error to the visitor. A missing `file` field returns 422 (standard FastAPI validation).
+
+**Example:**
+
+```bash
+curl -X POST <BASE_URL>/transcribe \
+  -F "file=@recording.webm;type=audio/webm"
+```
+
+```javascript
+// Browser — from a MediaRecorder blob
+const form = new FormData();
+form.append('file', audioBlob, 'recording.webm');
+const resp = await fetch(`${BASE_URL}/transcribe`, { method: 'POST', body: form });
+const { text } = await resp.json();
+// then send `text` to POST /ask
+```
 
 ---
 
@@ -784,16 +847,22 @@ All answers come from **Sophie**, a warm and knowledgeable museum guide. The per
 ### Architecture
 
 ```
-Any user speaks → STT → POST /ask (voice: true)
-                              ↓
+Any user speaks → record blob → POST /transcribe → { text }
+                                       ↓
+        POST /ask (voice: true, asker_name, participants)
+                                       ↓
               Backend: RAG answer + OpenAI TTS
-                              ↓
+                                       ↓
                      { answer, audio_url }
-                              ↓
+                                       ↓
          Frontend: Netblocks broadcast audio_url
-                              ↓
+                                       ↓
           All room members fetch URL → play audio
 ```
+
+Two pieces make the multi-user flow work end to end:
+- **`POST /transcribe`** turns each visitor's recorded audio into text (used when the browser's native Web Speech API is unavailable — e.g. in the WebXR headset browser).
+- **`asker_name` + `participants`** on `POST /ask` let Sophie address the whole room and name who asked. See [Room context](#room-context--multi-user-qa).
 
 ### Room entry — `POST /session/start`
 
@@ -855,6 +924,17 @@ Sophie's voice is generated using **OpenAI TTS** (`nova` voice, `tts-1` model). 
 - The `audio_url` is a **full HTTPS URL** — all room members can fetch it directly without any proxy.
 - Audio files are stored temporarily on the server. For a production deployment, consider moving to cloud storage (S3, etc.).
 - The `/ask` and `/session/start` `voice` parameter defaults to `false` — existing Quest and demo clients are unaffected.
+
+### CORS
+
+Browser requests are restricted to an explicit origin allow-list (set in `server.py`). Requests from other origins are rejected by the browser.
+
+| Origin | Purpose |
+|---|---|
+| `https://webxr-worldmodels.vercel.app` | Production WebXR front end |
+| `http://localhost:3000`, `http://localhost:5173` (and `127.0.0.1`) | Local frontend development |
+
+All methods and headers are allowed, so `application/json` and `multipart/form-data` (used by `/transcribe`) both work. Credentialed requests are enabled (`allow_credentials=True`). If you deploy the frontend to a new origin (e.g. a Vercel preview URL), add it to `ALLOWED_ORIGINS` in `server.py`. Native Unity/Quest clients are not subject to CORS.
 
 ---
 
@@ -951,6 +1031,8 @@ git push origin main
 |---|---|
 | API server | FastAPI + Uvicorn |
 | LLM | GPT-4o (QA + Vision) |
+| Speech-to-text | OpenAI Whisper (`whisper-1`) — `POST /transcribe` |
+| Text-to-speech | OpenAI TTS (`tts-1`, Sophie voice) |
 | Embeddings | OpenAI text-embedding-3-small |
 | Vector search | FAISS (via LangChain) |
 | Image processing | OpenCV |
