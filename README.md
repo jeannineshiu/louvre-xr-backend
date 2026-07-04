@@ -1,34 +1,56 @@
 # Louvre XR Backend
 
-FastAPI backend for an XR museum companion system.
-Core exhibition: **Louvre Museum, Paris** — eight sculptures spanning antiquity to the 19th century. Knowledge base also includes four additional works in the Jardin des Tuileries and Sydney for testing purposes.
+FastAPI backend powering Sophie, the AI museum guide for an XR companion experience at the Louvre.
+
+**Status:** Production — feature-complete, tested, and integrated with the WebXR frontend. Deployed on Railway with automatic redeploy on push to `main`.
+
+Core exhibition: **Louvre Museum, Paris** — eight sculptures spanning antiquity to the 19th century, plus four supplementary works (Jardin des Tuileries and a Sydney field-demo piece) that support the full feature set outside the main museum building.
 
 > **Access:** This server is deployed on Railway. Contact a team member for the public URL — it is not published here to limit access to the team.
 
 ---
 
-## What This Server Does
+## Contents
 
-This is a **pure QA + routing service**. It has no sensors, no camera, and no background threads. All it does is:
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Knowledge Base](#knowledge-base)
+- [Getting Started](#getting-started)
+- [API Reference](#api-reference)
+- [Context-Aware Response Length (optional)](#context-aware-response-length-optional)
+- [Sculpture Recognition](#sculpture-recognition)
+- [Splat Identification](#splat-identification)
+- [Multi-User / WebXR Integration](#multi-user--webxr-integration)
+- [Conversation History](#conversation-history)
+- [Deployment](#deployment)
+- [Tech Stack](#tech-stack)
 
-1. **Receive** a visitor's question + optional context (sensor state, camera image, conversation history) from the frontend
-2. **Identify** the sculpture in the image (if provided), using GPT-4o Vision
-3. **Decide** the appropriate response mode based on the visitor's context (gaze duration, crowd level)
-4. **Answer** the question using a RAG pipeline (FAISS vector search + GPT-4o), with a prompt tuned to the selected mode and full conversation history for follow-up awareness
+---
 
-Everything that involves sensing the physical environment — gaze tracking, crowd detection, noise classification — happens on the XR device and is passed to this server as values in the request body.
+## Overview
+
+This is a **pure QA + routing service** — no sensors, no camera, no background threads. It receives a request, resolves which exhibit is being discussed, retrieves grounded knowledge, and returns an answer.
+
+1. **Identify** the exhibit — from an `exhibit` id, a `splat` identifier, or an uploaded photo (GPT-4o Vision), in that priority order. If none is supplied, the answer still works, just without an anchored exhibit.
+2. *(Optional)* **Pick a response length** if the frontend supplies visitor context (gaze duration, crowd level) — see [Context-Aware Response Length](#context-aware-response-length-optional). Otherwise every answer defaults to full length.
+3. **Answer** the question via a RAG pipeline (FAISS vector search + GPT-4o), grounded in the exhibit's knowledge base, prompted for the chosen length, and aware of the full conversation history for follow-ups
+
+Any environment sensing (camera capture, gaze tracking, crowd/noise estimation) happens entirely on the client; this server only consumes the values passed in the request body.
+
+## Architecture
 
 ```
-XR Device (Unity / Quest / Phone / Browser)
-  ├── measures gaze_duration, crowd, noise
-  ├── captures camera frame (optional)
+Client (Browser / WebXR / Phone)
+  ├── captures a camera frame or holds a known exhibit/splat id   (optional)
+  ├── tracks gaze_duration / crowd for response-length tuning     (optional)
   ├── maintains conversation history array (client-side)
   └── sends POST /ask
             ↓
 AI Server (this repo)
-  ├── Step 1: GPT-4o Vision → identify sculpture (if image provided)
-  ├── Step 2: Context Router → decide mode from sensor state
-  ├── Step 3: RAG Engine → FAISS retrieval + GPT-4o answer (with history if provided)
+  ├── Resolve exhibit   → exhibit id | splat id | image (GPT-4o Vision), in that priority order
+  ├── Pick response mode → explicit `mode` > Context Router (if `state` supplied) > default FULL_VOICE
+  ├── RAG Engine        → FAISS retrieval + GPT-4o answer, prompted for the chosen mode (with history)
   └── returns { mode, answer, exhibit }
 ```
 
@@ -41,10 +63,10 @@ louvre-ar-backend/
 │
 ├── server.py               # FastAPI app — main entry point
 ├── qa_pipeline.py          # Orchestrates all modules in order
-├── context_router.py       # Decides response mode from gaze_duration + crowd + noise
+├── context_router.py       # Optional response-length routing from gaze_duration + crowd
 ├── rag_engine.py           # RAG: FAISS vector store + GPT-4o, mode-specific prompts
 ├── exhibit_recognizer.py   # GPT-4o Vision: identify sculpture from camera frame
-├── exhibits_data.py        # Museum knowledge base (12 sculptures: 8 main + 4 testing, 6 sections each)
+├── exhibits_data.py        # Museum knowledge base (12 sculptures: 8 main + 4 supplementary, 6 sections each)
 ├── navigation_routes.py    # Direct (from_id, to_id) route lookup table — 56 routes, no FAISS
 ├── splat_registry.py       # Resolves a Gaussian-splat identifier to an exhibit (GET /splats)
 ├── splat_mapping.json      # Editable splat → exhibit alias table used by splat_registry.py
@@ -58,7 +80,7 @@ louvre-ar-backend/
 ├── demo.html               # Browser demo — voice chat UI served at GET /demo
 ├── Dockerfile              # Container image for the FastAPI server
 ├── requirements.txt
-└── .env.example            # API key template — copy to .env and fill in
+└── .env.example             # API key template — copy to .env and fill in
 ```
 
 ---
@@ -82,13 +104,11 @@ Eight sculptures displayed inside the Louvre museum building, spanning antiquity
 
 Each main exhibit has six structured knowledge sections: `key_facts`, `visual_description`, `historical_context`, `technique`, `story`, `shop`.
 
-**Navigation** is handled separately via `navigation_routes.py` — a direct `(from_id, to_id)` lookup table with 56 pre-written routes covering all pairs of main exhibits. Navigation does not go through FAISS or GPT-4o: the frontend detects a navigation question, resolves the destination exhibit, and calls `GET /navigate` directly for a deterministic, instant response. Visitors can ask *"How do I get to the Seated Scribe from here?"* and receive specific directions with room numbers, wing names, and estimated walking times.
+**Navigation** is handled separately via `navigation_routes.py` — a direct `(from_id, to_id)` lookup table with 56 pre-written routes covering all pairs of main exhibits. Navigation does not go through FAISS or GPT-4o: the frontend detects a navigation question, resolves the destination exhibit, and calls `GET /navigate` directly for a deterministic, instant response.
 
----
+### Supplementary Exhibits
 
-### Additional Exhibits — For Testing Purposes
-
-Four additional works are included in the knowledge base to support field testing and extended demos. These are **not part of the core Louvre XR experience** and do not appear in the unrecognised-sculpture response.
+Four additional works extend the knowledge base beyond the core Louvre building — used for the Tuileries WebXR scene and an off-site field demo. They support the full feature set (text/voice Q&A, image recognition, shop info where available) but have no navigation data between them and the main exhibits.
 
 | Sculpture | Artist | Date | Location |
 |---|---|---|---|
@@ -97,13 +117,9 @@ Four additional works are included in the knowledge base to support field testin
 | L'Hommage à Cézanne | Aristide Maillol | 1912 | Jardin des Tuileries (Carrousel Garden), Paris |
 | Miles Franklin Statue | Jacek Luszczyk | 2003 | MacMahon Street, Hurstville, Sydney |
 
-These exhibits support the full feature set: text and voice Q&A, image recognition via GPT-4o Vision, and shop information where available. They do not have navigation data (no walking directions between them and the main Louvre exhibits).
-
 ---
 
-## Quick Start — Local Development
-
-### 1. Clone and set up environment
+## Getting Started
 
 ```bash
 git clone <repo-url>
@@ -112,125 +128,58 @@ cd louvre-ar-backend
 conda create -n contextar python=3.10
 conda activate contextar
 pip install -r requirements.txt
-```
 
-### 2. Set up API key
-
-```bash
 cp .env.example .env
-# Edit .env and fill in your OPENAI_API_KEY
-```
+# edit .env and fill in OPENAI_API_KEY
 
-### 3. Start the server
-
-The FAISS index is already committed — no rebuild needed.
-
-```bash
 uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Server: `http://localhost:8000`
-Interactive docs: `http://localhost:8000/docs`
-Browser demo: `http://localhost:8000/demo`
+The FAISS index is pre-built and committed — no rebuild needed for local development.
 
----
-
-## Demo Web App (`demo.html`)
-
-A single-page voice chat interface served directly by the FastAPI backend. Designed as a demo fallback when the Meta Quest 3 is unavailable — no app install required.
-
-### Access
-
-```
-GET <BASE_URL>/demo
-```
-
-Open this URL in a phone browser to use the full voice interface.
-
-### Features
-
-| Feature | Description |
+| Resource | URL |
 |---|---|
-| 📷 Sculpture scan | Tap the scan button to capture a photo with the phone camera. GPT-4o Vision identifies the sculpture and gives a brief intro (name, artist, date, country). |
-| 🎤 Voice input | Tap the microphone to ask a question by voice. The transcript appears in the chat in real time as you speak. |
-| 🔊 AI voice output | The AI answer is read aloud automatically via text-to-speech. Tap ⏹ to stop. |
-| 💬 Text input | Type a question as a fallback when voice is unavailable. |
-| 🔄 Multi-turn conversation | Full conversation history is maintained per sculpture session. Follow-up questions like "What technique did he use?" resolve correctly. |
-| 🏛 Exhibit badge | Shows the identified sculpture name. Tap **Wrong?** to clear a misidentification without resetting the conversation. Tap **✕** for a full session reset. |
-| 🛍 Shop info | Ask "Where can I buy a souvenir?" or "Is there a replica?" to surface real Louvre boutique products with prices and links. |
-| 🗺 Navigation | Ask "How do I get to the Venus de Milo?" or "Where is the Seated Scribe from here?" to get step-by-step walking directions with room numbers and estimated times. Covers all routes between the 8 main Louvre exhibits. |
-| 🌍 Multilingual | Ask in any language — Sophie detects it and responds in the same language. Voice input (STT) and voice output (TTS) also adapt to the visitor's language automatically. |
+| Server | `http://localhost:8000` |
+| Interactive API docs (Swagger) | `http://localhost:8000/docs` |
+| Browser demo | `http://localhost:8000/demo` |
 
-### Conversation flow
+---
 
-```
-1. Tap 📷 → photograph the sculpture
-2. AI identifies it and gives a one-line intro (name / artist / date / country)
-3. Tap 🎤 or type to ask anything about the sculpture
-4. AI answers with full detail (~150 words) and reads it aloud
-5. Continue asking follow-up questions — the AI remembers context
-6. Tap ✕ to start fresh with a new sculpture
-```
+## API Reference
 
-### Response modes
+### `POST /ask`
 
-| Trigger | Mode | Target length |
-|---|---|---|
-| First scan (intro) | `GLANCE_CARD` | ~20 words — name, artist, date, country only |
-| Follow-up questions | `FULL_VOICE` | ~150 words — full immersive answer |
+The core Q&A endpoint. Resolves the exhibit, retrieves grounded knowledge, and returns an answer.
 
-### Browser support
+**Request fields**
 
-| Device | Browser | Voice input | Camera | TTS |
-|---|---|---|---|---|
-| iPhone | **Safari** | ✅ | ✅ | ✅ |
-| iPhone | Chrome | ❌ | ✅ | ✅ |
-| Android | **Chrome** | ✅ | ✅ | ✅ |
-| Desktop | Chrome / Edge | ✅ | ✅ (webcam) | ✅ |
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `question` | `string` | Yes | Visitor's natural-language question. Must be non-empty — returns 422 if blank. |
+| `exhibit` | `string` | No | The exhibit the visitor is currently facing, as an id (`hommage_a_cezanne_maillol`) or display name (`L'Hommage à Cézanne`). Use when the frontend already knows the exhibit (e.g. a preset WebXR splat) so Sophie answers correctly without a camera scan. Highest priority — if set, recognition is skipped entirely. |
+| `splat` | `string` | No | Identifier of the currently displayed Gaussian splat (filename, URL, slug, or short name). Resolved to an exhibit automatically — see [Splat Identification](#splat-identification). Used only if `exhibit` isn't set; also skips image recognition if it resolves. |
+| `image_base64` | `string` | No | Base64 JPEG/PNG. GPT-4o Vision identifies the sculpture — but **only runs if neither `exhibit` nor `splat` resolved to a known exhibit.** Lowest priority of the three. |
+| `mode` | `string` | No | Direct override — skips the context router entirely. One of `GLANCE_CARD` \| `BRIEF_TEXT` \| `FULL_VOICE` \| `BRIEF_TEXT_PROMPT` \| `NAVIGATION` \| `SHOP`. Takes priority over `state`. Any other value returns 422. |
+| `state` | `object` | No | Optional visitor-context signal for automatic response-length routing — see [Context-Aware Response Length](#context-aware-response-length-optional). Omit entirely for a standard full-length answer. |
+| `history` | `array of {role, content}` | No | Prior conversation turns. `role` must be `"user"` or `"assistant"` — returns 422 otherwise. See [Conversation History](#conversation-history). |
+| `voice` | `boolean` | No | Default `false`. If `true`, generates a Sophie TTS audio file and returns `audio_url`. |
+| `asker_name` | `string` | No | Name of the asker, used with `participants` for multi-user rooms — see [Room context](#room-context--multi-user-qa). |
+| `participants` | `array of string` | No | Everyone currently in the room, e.g. `["Alice", "Bob", "Charlie"]`. |
 
-> **Note:** Voice input requires HTTPS. The Railway deployment is always HTTPS. For local development, use `http://localhost:8000/demo` (localhost is exempt from the HTTPS requirement).
+**Priority for response length:** `mode` (if set) → `state` (if set) → default `FULL_VOICE`.
 
-### Sculpture recognition behaviour
+`NAVIGATION` and `SHOP` are RAG-backed modes tuned for directions-only or merchandise-only answers, respectively — distinct from the deterministic `GET /navigate` lookup. The context router never selects them automatically; they're only reachable via an explicit `mode` value.
 
-- Recognition only triggers when a photo is included in the request.
-- GPT-4o Vision requires **all** listed visual markers to be clearly visible before returning a sculpture name. Ambiguous or non-listed sculptures return `"unknown"`.
-- If the sculpture is not identified, the AI returns an explicit message instead of guessing — see [If the image is unclear or not one of the recognised sculptures](#if-the-image-is-unclear-or-not-one-of-the-recognised-sculptures).
+**Response fields**
 
-### Shop & merchandise
-
-When a visitor asks about buying (e.g. *"Where can I buy this?"*, *"Is there a replica?"*, *"Any souvenirs?"*), the RAG retrieves the `shop` section from the knowledge base and surfaces real products from the [Louvre boutique](https://boutique.louvre.fr) with prices and direct URLs. Shop information is **only** surfaced on purchase-related questions — it does not appear in general answers.
-
-### Multilingual support
-
-Sophie responds in the visitor's language automatically. No language selection is needed.
-
-**How it works:**
-
-| Layer | Behaviour |
+| Field | Notes |
 |---|---|
-| STT (voice input) | `recognition.lang = ''` — browser auto-detects the spoken language |
-| Answer generation | All system prompts instruct GPT-4o to detect the question language and respond in it |
-| TTS (voice output) | The detected language is stored and used to select a matching device voice for playback |
-| Navigation keywords | Detected in English, French, German, Chinese, Japanese, and Spanish |
+| `mode` | Response mode used: `NO_RESPONSE` \| `BRIEF_TEXT` \| `GLANCE_CARD` \| `FULL_VOICE` \| `BRIEF_TEXT_PROMPT`, or the `NAVIGATION`/`SHOP` value passed in, if any |
+| `answer` | Text answer; empty string when `mode` is `NO_RESPONSE` |
+| `exhibit` | Resolved sculpture name; empty string if not identified |
+| `audio_url` | Full HTTPS URL of the generated mp3. Only present when `voice: true`. |
 
-**Tested languages:** English, French, German, Chinese (Mandarin), Japanese, Spanish
-
-**Known limitations:**
-- Navigation directions from the lookup table (`navigation_routes.py`) are pre-written in English. Visitors receive English room names and wing names regardless of language. The surrounding sentence may be in their language, but room identifiers (e.g. *"Room 635, Sully wing, Level 1"*) are always English.
-- UI system messages (badge text, error prompts, "which sculpture" clarification) remain in English.
-- Sophie's TTS voice (`nova`) is optimised for English. Other languages are intelligible but may have a slight accent.
-
----
-
-## Testing Guide
-
-The `/ask` endpoint supports three independent usage patterns. You can start from the simplest and add complexity as your integration matures. **None of them require a headset.**
-
----
-
-### Level 1 — Pure QA (AI answer only)
-
-Use this to verify the AI knowledge base and answer quality. No sensor data, no image, no mode selection. The server defaults to `FULL_VOICE` (full immersive answer).
+**Example**
 
 ```bash
 curl -X POST <BASE_URL>/ask \
@@ -238,235 +187,52 @@ curl -X POST <BASE_URL>/ask \
   -d '{"question": "Tell me about the Venus de Milo"}'
 ```
 
-```bash
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Why did the Dying Slave cause controversy?"}'
-```
-
-**Expected response:**
 ```json
-{
-  "mode": "FULL_VOICE",
-  "answer": "The Dying Slave is a marble sculpture by Michelangelo...",
-  "exhibit": ""
-}
+{ "mode": "FULL_VOICE", "answer": "The Venus de Milo is a marble sculpture...", "exhibit": "" }
 ```
 
----
+#### Room context — multi-user Q&A
 
-### Level 2 — Test specific response modes
-
-Use this to test how the frontend should render different response lengths. Pass `mode` directly to bypass the context router entirely.
+When **both** `asker_name` and `participants` are provided, the server prepends a context line to the question before sending it to GPT-4o, so Sophie can address the group by name (e.g. *"Great question, Alice — for everyone here…"*) instead of an anonymous visitor. Both fields are optional and independent of `voice`/`mode`/`state` — omitting either leaves the question unchanged.
 
 ```bash
-# One-sentence card (~20 words) — for crowded, quick-glance scenarios
 curl -X POST <BASE_URL>/ask \
   -H "Content-Type: application/json" \
-  -d '{"question": "Tell me about the Winged Victory", "mode": "GLANCE_CARD"}'
-
-# Short answer (~50 words) — for interested but brief engagement
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Tell me about the Winged Victory", "mode": "BRIEF_TEXT"}'
-
-# Full immersive answer (~150 words) — for deeply engaged visitors
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Tell me about the Winged Victory", "mode": "FULL_VOICE"}'
-
-# Brief answer + quiet-spot nudge — for engaged visitors in a crowd
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Tell me about the Winged Victory", "mode": "BRIEF_TEXT_PROMPT"}'
+  -d '{"question": "Tell me about the Winged Victory", "voice": true, "asker_name": "Alice", "participants": ["Alice", "Bob", "Charlie"]}'
 ```
-
-**All four valid modes:**
-
-| Mode | Target length | When to use |
-|---|---|---|
-| `GLANCE_CARD` | ~20 words | Crowded room, visitor glancing briefly |
-| `BRIEF_TEXT` | ~50 words | Low crowd, brief interest |
-| `FULL_VOICE` | ~150 words | Low crowd, deeply engaged |
-| `BRIEF_TEXT_PROMPT` | ~60 words | Engaged visitor but crowded — includes a nudge toward a quieter spot |
 
 ---
 
-### Level 3 — Full context router
+### `POST /transcribe`
 
-Use this to test the complete XR flow. Send sensor values the way your device would, and let the server decide the mode automatically.
+Speech-to-text for voice questions. The frontend records audio with `MediaRecorder` and posts the blob here; the server forwards it to **OpenAI Whisper** (`whisper-1`) and returns the transcript. Used in the multi-user WebXR flow, where the native Web Speech API isn't always available.
+
+**Request:** `multipart/form-data`
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `file` | file (audio blob) | Yes | Recorded audio — `webm` or `mp4`/`m4a`. |
+
+**Response:** `{ "text": "Tell me about the Winged Victory" }`
+
+On any failure (invalid/empty audio, Whisper API error) the endpoint returns `{"text": ""}` with HTTP **200** — never a 500 — so the client can degrade gracefully. A missing `file` field returns 422.
 
 ```bash
-# Visitor passing by — expect NO_RESPONSE, empty answer
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Tell me about this sculpture","state":{"crowd":"low","noise":"quiet","gaze_duration":2.0}}'
-
-# Briefly interested, low crowd — expect BRIEF_TEXT
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Tell me about this sculpture","state":{"crowd":"low","noise":"quiet","gaze_duration":8.0}}'
-
-# Glancing, crowded room — expect GLANCE_CARD
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Tell me about this sculpture","state":{"crowd":"crowded","noise":"noisy","gaze_duration":10.0}}'
-
-# Deeply engaged, low crowd — expect FULL_VOICE
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Tell me about this sculpture","state":{"crowd":"low","noise":"quiet","gaze_duration":20.0}}'
-
-# Deeply engaged, crowded — expect BRIEF_TEXT_PROMPT
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Tell me about this sculpture","state":{"crowd":"crowded","noise":"noisy","gaze_duration":20.0}}'
-```
-
-**Routing logic:**
-
-```
-gaze_duration < 5s                    →  NO_RESPONSE       (do not interrupt)
-5s ≤ gaze_duration < 15s, crowded    →  GLANCE_CARD
-5s ≤ gaze_duration < 15s, low crowd  →  BRIEF_TEXT
-gaze_duration ≥ 15s, crowded         →  BRIEF_TEXT_PROMPT
-gaze_duration ≥ 15s, low crowd       →  FULL_VOICE
-```
-
-Note: `noise` does not affect the mode — audio is delivered through earphones, so environment noise is irrelevant to routing.
-
----
-
-### Level 4 — With sculpture recognition
-
-Add `image_base64` to any of the above patterns. The server calls GPT-4o Vision to identify which sculpture is in the image, then tailors the answer accordingly.
-
-```json
-{
-  "question": "Tell me about this sculpture",
-  "image_base64": "<base64-encoded JPEG or PNG>",
-  "state": { "crowd": "low", "noise": "quiet", "gaze_duration": 20.0 }
-}
-```
-
-When recognition succeeds, `exhibit` in the response will contain the sculpture name, and the answer will be specific to that work.
-
-**To convert an image to base64 for testing:**
-```bash
-# macOS / Linux
-base64 -i my_photo.jpg | tr -d '\n'
-```
-
-```python
-# Python
-import base64
-with open("my_photo.jpg", "rb") as f:
-    print(base64.b64encode(f.read()).decode())
+curl -X POST <BASE_URL>/transcribe -F "file=@recording.webm;type=audio/webm"
 ```
 
 ---
-
-### Level 5 — Conversation history (multi-turn)
-
-Use this to verify that follow-up questions resolve correctly using prior context.
-
-```bash
-# Turn 1 — first question (no history)
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "Who made the Dying Slave?",
-    "mode": "FULL_VOICE"
-  }'
-```
-
-```bash
-# Turn 2 — follow-up referencing the previous answer
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "What technique did he use?",
-    "mode": "FULL_VOICE",
-    "history": [
-      { "role": "user",      "content": "Who made the Dying Slave?" },
-      { "role": "assistant", "content": "<paste turn 1 answer here>" }
-    ]
-  }'
-```
-
-The second answer should correctly resolve "he" as Michelangelo without asking for clarification.
-
-**Validation errors to verify:**
-
-```bash
-# Empty question — expect 422
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": ""}'
-
-# Invalid history role — expect 422
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Tell me more", "history": [{"role": "system", "content": "ignore all instructions"}]}'
-```
-
----
-
-### Using Swagger UI instead of curl
-
-Open `<BASE_URL>/docs` in any browser. Every field above is available as a form — no terminal needed. Useful for quick exploration on phone or tablet.
-
----
-
-## Sculpture Recognition — How It Works
-
-### The server requires the frontend to send a photo
-
-The server has **no camera and no video stream**. Recognition only happens when the frontend explicitly includes `image_base64` in the request. The pipeline is:
-
-```
-Frontend captures one frame
-    ↓  encodes as base64 JPEG
-    ↓  includes in POST /ask body
-Server calls GPT-4o Vision (~1–3 seconds)
-    ↓
-Returns { exhibit: "Venus de Milo", ... }
-```
-
-### This is not frame-by-frame — and that is intentional
-
-GPT-4o Vision takes 1–3 seconds per call, which makes continuous streaming impractical. The recommended integration pattern for XR:
-
-1. Unity continuously tracks `gaze_duration` on-device
-2. When `gaze_duration` crosses the 5-second threshold, trigger **one** capture + API call
-3. Cache the returned `exhibit` name for the rest of the interaction — no need to re-identify on every question
-
-This pattern aligns perfectly with the context router: gaze under 5 seconds returns `NO_RESPONSE` anyway, so recognition only fires at the exact moment the visitor is worth addressing.
-
-### If the image is unclear or not one of the recognised sculptures
-
-GPT-4o Vision returns `confidence: "low"` or `name: "unknown"`. The server then returns an explicit message to the visitor:
-
-> *"I wasn't able to identify this sculpture as one of the works in my system. I can tell you about: the Winged Victory of Samothrace, Venus de Milo, …"*
-
-The server does **not** guess or fall back to a random sculpture — it tells the visitor exactly which works it covers and asks them to try scanning again.
-
----
-
-## API Reference
 
 ### `GET /navigate`
 
-Direct walking-directions lookup. No FAISS, no LLM — instant dictionary lookup.
-
-**Query parameters:**
+Direct walking-directions lookup — no FAISS, no LLM, instant dictionary lookup.
 
 | Parameter | Type | Required | Notes |
 |---|---|---|---|
-| `from_exhibit` | `string` | Yes | ID of the visitor's current exhibit |
-| `to_exhibit` | `string` | Yes | ID of the destination exhibit |
+| `from_exhibit` | `string` | Yes | Exhibit id of the visitor's current location |
+| `to_exhibit` | `string` | Yes | Exhibit id of the destination |
 
-**Exhibit IDs:**
+**Exhibit IDs**
 
 | Exhibit | ID |
 |---|---|
@@ -479,7 +245,10 @@ Direct walking-directions lookup. No FAISS, no LLM — instant dictionary lookup
 | Bastet Cat Statue | `bastet_cat_statue` |
 | La Siesta | `la_siesta_foyatier` |
 
-**Response:**
+```bash
+curl "<BASE_URL>/navigate?from_exhibit=venus_de_milo&to_exhibit=the_crouching_scribe"
+```
+
 ```json
 {
   "found": true,
@@ -489,213 +258,115 @@ Direct walking-directions lookup. No FAISS, no LLM — instant dictionary lookup
 }
 ```
 
-If `from_exhibit == to_exhibit`, returns `"You are already at [name]."`. If the route is not found, returns `{ "found": false, "directions": "" }`.
-
-**Example:**
-```bash
-curl "<BASE_URL>/navigate?from_exhibit=venus_de_milo&to_exhibit=the_crouching_scribe"
-```
+If `from_exhibit == to_exhibit`, returns `"You are already at [name]."`. If no route exists, returns `{ "found": false, "directions": "" }`.
 
 ---
 
-### `GET /demo`
+### `GET /splats`
 
-Returns the browser demo page (`demo.html`). Open in a phone browser for the full voice chat interface.
-
-### `GET /health`
-
-```json
-{ "status": "ok" }
-```
-
-### `POST /ask` — request fields
-
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `question` | `string` | Yes | Visitor's natural-language question. Must be non-empty — returns 422 if blank. |
-| `image_base64` | `string` | No | Base64 JPEG/PNG; omit to skip recognition |
-| `exhibit` | `string` | No | The exhibit the visitor is currently facing, as an id (`hommage_a_cezanne_maillol`) or display name (`L'Hommage à Cézanne`). Set this when the frontend already knows the exhibit — e.g. a preset WebXR splat — so Sophie answers about the right work without a camera scan. Image recognition, if provided and successful, takes priority. |
-| `splat` | `string` | No | The identifier of the currently displayed Gaussian splat — a filename, URL, slug, or short name. The backend identifies which exhibit it is (see [Splat identification](#splat-identification)). Use this when the frontend has a splat identifier but not the backend exhibit id. `exhibit` takes priority if both are sent. |
-| `state` | `object` | No | Sensor state; omit to skip context routing |
-| `state.crowd` | `"low"` \| `"crowded"` | No | Default: `"low"` |
-| `state.noise` | `"quiet"` \| `"noisy"` | No | Default: `"quiet"` |
-| `state.gaze_duration` | `float` (seconds) | No | Default: `0.0` |
-| `mode` | `string` | No | Direct mode override — takes priority over `state` |
-| `history` | `array of {role, content}` | No | Prior conversation turns. `role` must be `"user"` or `"assistant"` — returns 422 otherwise. See [Conversation History](#conversation-history). |
-| `voice` | `boolean` | No | Default: `false`. If `true`, generates a Sophie TTS audio file and returns `audio_url`. Use for multi-user broadcast via Netblocks. |
-| `asker_name` | `string` | No | Name of the person asking, e.g. `"Alice"`. Used with `participants` for multi-user rooms. See [Room context](#room-context--multi-user-qa). |
-| `participants` | `array of string` | No | Everyone currently in the room, e.g. `["Alice", "Bob", "Charlie"]`. Used with `asker_name`. |
-
-**Priority:** `mode` (if set) → `state` (if set) → default `FULL_VOICE`
-
-#### Room context — multi-user Q&A
-
-When **both** `asker_name` and `participants` are provided, the server prepends a context line to the question before sending it to GPT-4o, so Sophie knows who is in the room and who is asking. This lets her address the group ("Great question, Alice — for everyone here…") instead of a single anonymous visitor.
-
-The question sent to the model becomes:
-
-```
-[Room context: 3 people in this room — Alice, Bob, Charlie. This question is from Alice.]
-Question: Tell me about the Winged Victory
-```
-
-Both fields are optional and independent of `voice`, `mode`, and `state`. If either is omitted, the question is passed through unchanged (fully backward compatible — existing Quest and demo clients are unaffected).
+Registry lookup for the Gaussian-splat resolver — see [Splat Identification](#splat-identification) for the full mapping behaviour.
 
 ```bash
-curl -X POST <BASE_URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "Tell me about the Winged Victory",
-    "mode": "FULL_VOICE",
-    "voice": true,
-    "asker_name": "Alice",
-    "participants": ["Alice", "Bob", "Charlie"]
-  }'
-```
-
-### `POST /ask` — response fields
-
-| Field | Notes |
-|---|---|
-| `mode` | The mode used: `NO_RESPONSE` \| `BRIEF_TEXT` \| `GLANCE_CARD` \| `FULL_VOICE` \| `BRIEF_TEXT_PROMPT` |
-| `answer` | Text answer; empty string when `mode` is `NO_RESPONSE` |
-| `exhibit` | Recognised sculpture name; empty string if not identified |
-| `audio_url` | Full HTTPS URL of the generated mp3 file. Only present when `voice: true`. All room members can fetch this URL directly. |
-
----
-
-### `POST /transcribe`
-
-Speech-to-text for voice questions. The frontend records audio with `MediaRecorder` and posts the blob here; the server sends it straight to **OpenAI Whisper** (`whisper-1`) and returns the transcript. Designed for the multi-user WebXR flow, where the browser cannot always use the native Web Speech API.
-
-**Request:** `multipart/form-data`
-
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `file` | file (audio blob) | Yes | Recorded audio — `webm` or `mp4`/`m4a`. Sent as-is to Whisper. |
-
-**Response:**
-
-```json
-{ "text": "Tell me about the Winged Victory" }
-```
-
-**Failure handling:** on any error (invalid audio, empty file, Whisper API failure) the endpoint returns `{"text": ""}` with HTTP **200** — never a 500 — so the frontend can degrade gracefully instead of surfacing an error to the visitor. A missing `file` field returns 422 (standard FastAPI validation).
-
-**Example:**
-
-```bash
-curl -X POST <BASE_URL>/transcribe \
-  -F "file=@recording.webm;type=audio/webm"
-```
-
-```javascript
-// Browser — from a MediaRecorder blob
-const form = new FormData();
-form.append('file', audioBlob, 'recording.webm');
-const resp = await fetch(`${BASE_URL}/transcribe`, { method: 'POST', body: form });
-const { text } = await resp.json();
-// then send `text` to POST /ask
-```
-
----
-
-### Splat identification
-
-The [WebXR scene](https://webxr-worldmodels.vercel.app) simulates the **Jardin des Tuileries** and contains exactly three Gaussian-splat sculptures, all by **Aristide Maillol**:
-
-| Splat | Exhibit id | Notes |
-|---|---|---|
-| Air | `air_maillol` | **Default splat** shown on load |
-| La Nuit (Night) | `la_nuit_maillol` | |
-| L'Hommage à Cézanne | `hommage_a_cezanne_maillol` | |
-
-When a visitor asks a question, the frontend sends the current splat's identifier as the `splat` field on `POST /ask`, and the backend identifies which exhibit it is — so *"What is the statue in front of me?"* resolves to the correct work without a camera scan.
-
-**Why this exists:** without it, a question with no visual cues ("What is this?") makes the RAG guess from the question text alone, which returns the wrong sculpture.
-
-**What the frontend can send** — the resolver is deliberately forgiving. All of these resolve to `Air` (the default splat):
-
-| `splat` value | Resolves to |
-|---|---|
-| `air_maillol` (exhibit id) | Air |
-| `Air` (display name) | Air |
-| `https://.../splats/air.splat` (URL) | Air |
-| `air_2024.ply` (filename) | Air |
-| `air` (slug) | Air |
-
-Matching ignores case, accents, and punctuation; strips URL paths and splat extensions (`.splat` / `.ply` / `.ksplat` / `.spz`); and every exhibit id and display name is accepted automatically. Unrecognised identifiers resolve to nothing (the question is answered without an anchored exhibit) rather than erroring.
-
-**Mapping is editable** in `splat_mapping.json` — the three Tuileries splats are configured there with aliases. To wire a real splat filename that doesn't already contain the sculpture's name, add `"your_splat_filename": "exhibit_id"`. No code change or redeploy of logic needed. See `splat_registry.py` for the resolver.
-
-#### `GET /splats`
-
-Registry helper for debugging the frontend integration.
-
-```bash
-# Resolve a single identifier
 curl "<BASE_URL>/splats?value=cezanne_v2.splat"
 # → { "value": "cezanne_v2.splat", "exhibit": "L'Hommage à Cézanne", "recognized": true }
 
-# Full alias → exhibit-name mapping
-curl "<BASE_URL>/splats"
+curl "<BASE_URL>/splats"   # full alias → exhibit-name mapping
 ```
-
-Use `GET /splats?value=<what your frontend sends>` to confirm a splat identifier resolves before wiring it into `/ask`.
 
 ---
 
 ### `POST /session/start`
 
-Generates Sophie's welcome greeting when visitors join a shared WebXR room. Designed for multi-user entry points — call once, broadcast the `audio_url` to all room members.
-
-**Request fields:**
+Generates Sophie's welcome greeting (one short sentence, max ~20 words) when visitors join a shared WebXR room. Call once per room entry and broadcast the result to all members.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `exhibit` | `string` | No | Exhibit name if already identified — Sophie will reference it in the greeting. Omit for a generic welcome. |
-| `voice` | `boolean` | No | Default: `false`. If `true`, generates TTS audio and returns `audio_url`. |
+| `exhibit` | `string` | No | Exhibit name, if already known — Sophie references it in the greeting. |
+| `voice` | `boolean` | No | Default `false`. If `true`, returns `audio_url`. |
 
-**Response:**
-
-| Field | Notes |
-|---|---|
-| `greeting` | Sophie's welcome text (2–3 sentences) |
-| `audio_url` | Full HTTPS URL of the mp3. Only present when `voice: true`. |
-
-**Examples:**
+**Response:** `{ "greeting": "...", "audio_url": "..." }` (`audio_url` only when `voice: true`)
 
 ```bash
-# Generic welcome
-curl -X POST <BASE_URL>/session/start \
-  -H "Content-Type: application/json" \
-  -d '{"voice": true}'
-
-# Sculpture-specific welcome
 curl -X POST <BASE_URL>/session/start \
   -H "Content-Type: application/json" \
   -d '{"exhibit": "Venus de Milo", "voice": true}'
 ```
 
-**Example response:**
-```json
-{
-  "greeting": "Welcome, everyone! I'm Sophie, your MuseXR guide. Today we're standing before the Venus de Milo — one of the most iconic sculptures in the world. Ask me anything!",
-  "audio_url": "https://louvre-xr-backend-production.up.railway.app/audio/abc123-..."
-}
-```
+---
+
+### `GET /audio/{file_id}`
+
+Serves a previously generated Sophie TTS mp3 (the file behind an `audio_url` returned by `/ask` or `/session/start`). Returns 404 if the file doesn't exist. Files live under `temp_audio/` with no automatic cleanup — see the storage note under [Multi-User / WebXR Integration](#multi-user--webxr-integration).
+
+### `GET /demo`
+
+Returns the browser demo page (`demo.html`) — see [Multi-User / WebXR Integration](#multi-user--webxr-integration).
+
+### `GET /health`
+
+`{ "status": "ok" }` — liveness check.
 
 ---
 
-## Multi-User Experience — WebXR / Netblocks Integration
+## Context-Aware Response Length (optional)
 
-Designed for [webxr-worldmodels.vercel.app](https://webxr-worldmodels.vercel.app) using IWSDK and Netblocks multiplayer. Sophie acts as a shared tour guide — when anyone asks a question, everyone in the room hears her answer simultaneously.
+The server can adjust answer length automatically based on visitor context (`gaze_duration`, `crowd`), but **this is a secondary, opt-in feature** — it exists to support richer XR clients, not a requirement of the core product. A frontend can ignore it entirely by omitting `state`, in which case every answer defaults to the full-length `FULL_VOICE` mode.
 
-### Sophie persona
+If a client does supply `state`, the routing logic is:
 
-All answers come from **Sophie**, a warm and knowledgeable museum guide. The persona is applied server-side — no frontend changes needed for this.
+| `gaze_duration` | `crowd` | Mode | Target length |
+|---|---|---|---|
+| < 5s | any | `NO_RESPONSE` | — (do not interrupt) |
+| 5–15s | crowded | `GLANCE_CARD` | ~20 words |
+| 5–15s | low | `BRIEF_TEXT` | ~50 words |
+| ≥ 15s | crowded | `BRIEF_TEXT_PROMPT` | ~60 words, nudges toward a quieter spot |
+| ≥ 15s | low | `FULL_VOICE` | ~100 words |
 
-### Architecture
+`state.noise` is accepted for forward compatibility but currently has no effect on routing — audio is delivered through earphones, so ambient noise doesn't change the response strategy.
+
+`mode` can also be set directly on `/ask` to bypass this router entirely and force a specific response length, independent of `state`.
+
+---
+
+## Sculpture Recognition
+
+The server has no camera — recognition only runs when the client includes `image_base64` in the request.
+
+```
+Client captures one frame → base64 JPEG → POST /ask
+Server calls GPT-4o Vision (~1–3s)
+Returns { exhibit: "Venus de Milo", ... }
+```
+
+This is intentionally a single call per interaction, not frame-by-frame streaming: GPT-4o Vision's 1–3s latency makes continuous polling impractical. Recommended pattern — trigger one capture when the visitor's gaze crosses a few seconds of dwell time, then reuse the returned `exhibit` for the rest of that interaction.
+
+GPT-4o Vision requires all listed visual markers to be clearly visible before returning a sculpture name; ambiguous images return `"unknown"`. When recognition fails, the server returns an explicit message naming the works it covers rather than guessing:
+
+> *"I wasn't able to identify this sculpture as one of the works in my system. I can tell you about: the Winged Victory of Samothrace, Venus de Milo, …"*
+
+---
+
+## Splat Identification
+
+The [WebXR scene](https://webxr-worldmodels.vercel.app) simulates the Jardin des Tuileries and contains three Gaussian-splat sculptures, all by **Aristide Maillol**:
+
+| Splat | Exhibit id | Notes |
+|---|---|---|
+| Air | `air_maillol` | Default splat shown on load |
+| La Nuit (Night) | `la_nuit_maillol` | |
+| L'Hommage à Cézanne | `hommage_a_cezanne_maillol` | |
+
+The frontend sends the current splat's identifier as the `splat` field on `POST /ask`, and the backend resolves it to an exhibit — so a question with no visual cues (*"What is this?"*) still anchors to the correct sculpture instead of the RAG guessing from question text alone.
+
+The resolver is deliberately forgiving: it accepts exhibit ids, display names, filenames (`air_2024.ply`), slugs (`air`), or full URLs (`https://.../splats/air.splat`); ignores case, accents, and punctuation; and strips known splat extensions (`.splat` / `.ply` / `.ksplat` / `.spz`). Unrecognised identifiers resolve to nothing rather than erroring — the question is simply answered without an anchored exhibit.
+
+New aliases can be added to `splat_mapping.json` without a code change or logic redeploy. Use `GET /splats?value=<what your frontend sends>` to confirm resolution before wiring a new splat into `/ask`.
+
+---
+
+## Multi-User / WebXR Integration
+
+Built for [webxr-worldmodels.vercel.app](https://webxr-worldmodels.vercel.app) using IWSDK and Netblocks multiplayer. Sophie acts as a shared tour guide — when anyone asks a question, everyone in the room hears the answer simultaneously.
 
 ```
 Any user speaks → record blob → POST /transcribe → { text }
@@ -711,99 +382,73 @@ Any user speaks → record blob → POST /transcribe → { text }
           All room members fetch URL → play audio
 ```
 
-Two pieces make the multi-user flow work end to end:
-- **`POST /transcribe`** turns each visitor's recorded audio into text (used when the browser's native Web Speech API is unavailable — e.g. in the WebXR headset browser).
-- **`asker_name` + `participants`** on `POST /ask` let Sophie address the whole room and name who asked. See [Room context](#room-context--multi-user-qa).
-
-### Room entry — `POST /session/start`
-
-Call this when a user joins the room. Sophie greets everyone; broadcast the audio to all members.
-
 ```javascript
+// Room entry
 async function onRoomJoin(currentExhibit = null) {
-  const body = { voice: true };
-  if (currentExhibit) body.exhibit = currentExhibit;
-
+  const body = { voice: true, ...(currentExhibit && { exhibit: currentExhibit }) };
   const resp = await fetch(`${BASE_URL}/session/start`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(body),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
-  const data = await resp.json();
-
-  // Broadcast Sophie's greeting to everyone
-  if (data.audio_url) {
-    netblocksRoom.broadcast({ type: 'sophie_audio', url: data.audio_url });
-  }
+  const { audio_url } = await resp.json();
+  if (audio_url) netblocksRoom.broadcast({ type: 'sophie_audio', url: audio_url });
 }
-```
 
-### Q&A — `POST /ask` with `voice: true`
-
-Add `voice: true` to every Q&A request. The same Netblocks handler works for both greetings and answers.
-
-```javascript
+// Q&A
 async function askSophie(question) {
   const resp = await fetch(`${BASE_URL}/ask`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ question, mode: 'FULL_VOICE', voice: true }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, mode: 'FULL_VOICE', voice: true }),
   });
   const data = await resp.json();
-
-  // Display text for the person who asked
   showSubtitle(data.answer);
-
-  // Broadcast audio to everyone in the room
-  if (data.audio_url) {
-    netblocksRoom.broadcast({ type: 'sophie_audio', url: data.audio_url });
-  }
+  if (data.audio_url) netblocksRoom.broadcast({ type: 'sophie_audio', url: data.audio_url });
 }
 
-// Every user plays the audio when they receive the broadcast
-netblocksRoom.on('sophie_audio', ({ url }) => {
-  new Audio(url).play();
-});
+netblocksRoom.on('sophie_audio', ({ url }) => new Audio(url).play());
 ```
 
-### Sophie's TTS voice
+Sophie's voice is generated with **OpenAI TTS** (`tts-1`, `nova` by default), configurable via the `SOPHIE_VOICE` environment variable (`alloy` \| `echo` \| `fable` \| `onyx` \| `nova` \| `shimmer`). `audio_url` is a full HTTPS URL fetchable by all room members without a proxy; audio files are stored temporarily on the server (consider S3 or similar for a larger-scale deployment). Native clients (Unity/Quest) are not subject to CORS.
 
-Sophie's voice is generated using **OpenAI TTS** (`nova` voice, `tts-1` model). The voice is configurable via the `SOPHIE_VOICE` environment variable on Railway. Options: `alloy` \| `echo` \| `fable` \| `onyx` \| `nova` \| `shimmer`.
+### Demo web app (`demo.html`)
 
-### Important notes
+A single-page voice chat UI served directly by this backend at `GET /demo` — a browser fallback when a headset isn't available, no app install required.
 
-- The `audio_url` is a **full HTTPS URL** — all room members can fetch it directly without any proxy.
-- Audio files are stored temporarily on the server. For a production deployment, consider moving to cloud storage (S3, etc.).
-- The `/ask` and `/session/start` `voice` parameter defaults to `false` — existing Quest and demo clients are unaffected.
+| Feature | Description |
+|---|---|
+| Sculpture scan | Camera capture → GPT-4o Vision identifies the sculpture and gives a one-line intro |
+| Voice input / output | Native browser Web Speech API — `SpeechRecognition` for input, `speechSynthesis` for reading answers aloud. Entirely client-side; no server call for either direction. |
+| Multi-turn conversation | Full history maintained per sculpture session; follow-ups resolve correctly |
+| Shop info | Purchase-related questions surface real [Louvre boutique](https://boutique.louvre.fr) products |
+| Navigation | Ask "How do I get to the Venus de Milo?" — resolved client-side and answered via `GET /navigate`, or via the `NAVIGATION` RAG mode when the destination can't be parsed |
+| Multilingual | Voice recognition auto-detects the spoken language; the detected language is then matched to a browser voice for playback |
+
+**Browser support:** Safari and Chrome (iPhone/Android/Desktop) all support camera and browser TTS; voice *input* requires Safari on iPhone (Chrome on iOS doesn't expose the Web Speech API) or Chrome/Edge elsewhere, and HTTPS (localhost is exempt).
+
+**Multilingual notes:** navigation/shop keyword detection covers English, French, German, Chinese, and Japanese (navigation also covers Spanish); anything outside those keyword sets still reaches the AI, which detects the question's language independently. Navigation directions from the static lookup table are always in English regardless of the visitor's language; UI chrome (badges, error prompts) also stays in English. Voice output quality depends on the voices installed on the visitor's device — the demo doesn't call the server's OpenAI TTS.
 
 ### CORS
 
-Browser requests are restricted to an explicit origin allow-list (set in `server.py`). Requests from other origins are rejected by the browser.
+Browser requests are restricted to an explicit origin allow-list in `server.py`:
 
 | Origin | Purpose |
 |---|---|
-| `https://webxr-worldmodels.vercel.app` | Production WebXR front end |
+| `https://webxr-worldmodels.vercel.app` | Production WebXR frontend |
 | `http://localhost:3000`, `http://localhost:5173` (and `127.0.0.1`) | Local frontend development |
-| `https://localhost:8081` | Local HTTPS dev server (e.g. WebXR — HTTPS required for camera/mic) |
+| `https://localhost:8081` | Local HTTPS dev server (HTTPS required for camera/mic) |
 
-All methods and headers are allowed, so `application/json` and `multipart/form-data` (used by `/transcribe`) both work. Credentialed requests are enabled (`allow_credentials=True`). If you deploy the frontend to a new origin (e.g. a Vercel preview URL), add it to `ALLOWED_ORIGINS` in `server.py`. Native Unity/Quest clients are not subject to CORS.
+All methods/headers are allowed and credentialed requests are enabled. Add any new frontend origin (e.g. a Vercel preview URL) to `ALLOWED_ORIGINS` in `server.py`.
 
 ---
 
 ## Conversation History
 
-The server is stateless — the frontend is responsible for maintaining and sending the conversation history with each request. This means follow-up questions like "What technique did he use?" or "Tell me more about that" resolve correctly without the visitor needing to repeat context.
+The server is stateless — the client owns and sends the conversation history with each request, so follow-ups like *"What technique did he use?"* resolve without the visitor repeating context.
 
-### How it works
-
-Each turn, the frontend appends the visitor's question and the server's answer to a local history array, then includes the full array in the next request. The server passes this to GPT-4o as a full message thread alongside the retrieved exhibit knowledge.
-
-### Request format
+Each turn, the client appends the question and answer to a local history array and includes the full array on the next request:
 
 ```json
 {
   "question": "What technique did he use?",
-  "mode": "FULL_VOICE",
   "history": [
     { "role": "user",      "content": "Who made the Dying Slave?" },
     { "role": "assistant", "content": "The Dying Slave was carved by Michelangelo between 1513 and 1516." }
@@ -811,62 +456,19 @@ Each turn, the frontend appends the visitor's question and the server's answer t
 }
 ```
 
-### Unity (C#) integration pattern
-
-```csharp
-private List<HistoryMessage> _history = new();
-
-IEnumerator AskServer(string question, float gazeDuration, string crowd, string noise)
-{
-    var body = new AskRequest
-    {
-        question = question,
-        state    = new AskState { crowd = crowd, noise = noise, gaze_duration = gazeDuration },
-        history  = _history.ToArray()
-    };
-
-    string json = JsonUtility.ToJson(body);
-    using var req = new UnityWebRequest($"{BASE_URL}/ask", "POST");
-    req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-    req.downloadHandler = new DownloadHandlerBuffer();
-    req.SetRequestHeader("Content-Type", "application/json");
-    yield return req.SendWebRequest();
-
-    if (req.result == UnityWebRequest.Result.Success)
-    {
-        var resp = JsonUtility.FromJson<AskResponse>(req.downloadHandler.text);
-
-        // Append this turn to history before handling the response
-        _history.Add(new HistoryMessage { role = "user",      content = question });
-        _history.Add(new HistoryMessage { role = "assistant", content = resp.answer });
-
-        HandleResponse(resp);
-    }
-}
-
-// Call this when the visitor moves to a new exhibit
-public void ClearHistory() => _history.Clear();
-```
-
-### Notes
-
-- **History is optional** — omit it entirely for the first question of a session; the server defaults to stateless RAG.
-- **Clear history** when the visitor moves to a new sculpture so the new conversation starts fresh.
-- There is no server-side session state — if the app restarts, simply start a new history array.
+`history` is optional — omit it for the first question of a session. Clear it client-side when the visitor moves to a new sculpture; there is no server-side session state, so a restarted app simply starts a fresh array.
 
 ---
 
 ## Deployment
 
-Deployed on Railway via the included `Dockerfile`. Redeploys automatically on every push to `main`.
+Deployed on Railway via the included `Dockerfile`; redeploys automatically on every push to `main`.
 
-### Required environment variable
-
-| Variable | Value |
+| Environment variable | Value |
 |---|---|
 | `OPENAI_API_KEY` | Your OpenAI API key (`sk-...`) |
 
-### Rebuild FAISS index (only needed after editing `exhibits_data.py`)
+Rebuild the FAISS index only after editing `exhibits_data.py`:
 
 ```bash
 python rag_engine.py --build
