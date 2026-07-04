@@ -1,6 +1,6 @@
-# Louvre XR Backend
+# MuseXR Backend
 
-FastAPI backend powering Sophie, the AI museum guide for an XR companion experience at the Louvre.
+FastAPI backend for **MuseXR**, an AI museum-guide platform for the Louvre. It handles exhibit recognition, RAG-based Q&A, and voice, shared across three independent frontends — a browser demo, a Meta AI Glasses app, and a multiplayer WebXR tour (where the guide is named **Sophie**).
 
 **Status:** Production — feature-complete, tested, and integrated across all three client frontends. Deployed on Railway with automatic redeploy on push to `main`.
 
@@ -46,7 +46,7 @@ This backend is shared by three independent clients. The knowledge base and reco
 | Client | Experience | Exhibits it uses |
 |---|---|---|
 | `demo.html` (this repo, `GET /demo`) | On-site Louvre visit — browser fallback when a headset isn't available | All 8 main Louvre exhibits, via camera scan |
-| [MuseXR-Android](https://github.com/jeannineshiu/MuseXR-Android) | On-site Louvre visit — Android app for **Meta AI Glasses**: look at a sculpture, tap the glasses, hear Sophie's description spoken back through them | All 8 main Louvre exhibits, via camera scan |
+| [MuseXR-Android](https://github.com/jeannineshiu/MuseXR-Android) | On-site Louvre visit — Android app for **Meta AI Glasses**: look at a sculpture, tap the glasses, hear an AI-generated description spoken back through them | All 8 main Louvre exhibits, via camera scan |
 | [WebXR](https://webxr-worldmodels.vercel.app) | Remote multiplayer WebXR tour | Only the 3 Jardin des Tuileries Gaussian splats — see [Splat Identification](#splat-identification) |
 
 MuseXR-Android is built on the **Meta Wearables Device Access Toolkit (DAT)** for pairing with the glasses and pulling frames from their camera; from this backend's point of view it's just another `POST /ask` caller sending `image_base64`, indistinguishable from `demo.html`'s requests.
