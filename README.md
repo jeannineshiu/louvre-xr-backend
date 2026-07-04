@@ -2,7 +2,7 @@
 
 FastAPI backend powering Sophie, the AI museum guide for an XR companion experience at the Louvre.
 
-**Status:** Production — feature-complete, tested, and integrated with the WebXR frontend. Deployed on Railway with automatic redeploy on push to `main`.
+**Status:** Production — feature-complete, tested, and integrated across all three client frontends. Deployed on Railway with automatic redeploy on push to `main`.
 
 Core exhibition: **Louvre Museum, Paris** — eight sculptures spanning antiquity to the 19th century, plus four supplementary works (Jardin des Tuileries and a Sydney field-demo piece) that support the full feature set outside the main museum building.
 
@@ -13,6 +13,7 @@ Core exhibition: **Louvre Museum, Paris** — eight sculptures spanning antiquit
 ## Contents
 
 - [Overview](#overview)
+- [Frontends](#frontends)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Knowledge Base](#knowledge-base)
@@ -37,6 +38,18 @@ This is a **pure QA + routing service** — no sensors, no camera, no background
 3. **Answer** the question via a RAG pipeline (FAISS vector search + GPT-4o), grounded in the exhibit's knowledge base, prompted for the chosen length, and aware of the full conversation history for follow-ups
 
 Any environment sensing (camera capture, gaze tracking, crowd/noise estimation) happens entirely on the client; this server only consumes the values passed in the request body.
+
+## Frontends
+
+This backend is shared by three independent clients. The knowledge base and recognition cover all 12 exhibits — which subset each client actually surfaces is a frontend-side choice, not a backend limitation.
+
+| Client | Experience | Exhibits it uses |
+|---|---|---|
+| `demo.html` (this repo, `GET /demo`) | On-site Louvre visit — browser fallback when a headset isn't available | All 8 main Louvre exhibits, via camera scan |
+| [MuseXR-Android](https://github.com/jeannineshiu/MuseXR-Android) | On-site Louvre visit — native Android app | All 8 main Louvre exhibits, via camera scan |
+| [WebXR](https://webxr-worldmodels.vercel.app) | Remote multiplayer WebXR tour | Only the 3 Jardin des Tuileries Gaussian splats — see [Splat Identification](#splat-identification) |
+
+The WebXR frontend's default scene is the Jardin des Tuileries, not the Louvre building, so its Sophie guide only needs to recognize the three Maillol splats there (`Air`, `La Nuit`, `L'Hommage à Cézanne`). That scoping is encoded in `splat_mapping.json`'s aliases on the frontend-facing side — the underlying `/ask`, `/splats`, and image-recognition endpoints can resolve any of the 12 exhibits regardless of which client calls them.
 
 ## Architecture
 
