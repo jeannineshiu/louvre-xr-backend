@@ -46,8 +46,10 @@ This backend is shared by three independent clients. The knowledge base and reco
 | Client | Experience | Exhibits it uses |
 |---|---|---|
 | `demo.html` (this repo, `GET /demo`) | On-site Louvre visit — browser fallback when a headset isn't available | All 8 main Louvre exhibits, via camera scan |
-| [MuseXR-Android](https://github.com/jeannineshiu/MuseXR-Android) | On-site Louvre visit — native Android app | All 8 main Louvre exhibits, via camera scan |
+| [MuseXR-Android](https://github.com/jeannineshiu/MuseXR-Android) | On-site Louvre visit — Android app for **Meta AI Glasses**: look at a sculpture, tap the glasses, hear Sophie's description spoken back through them | All 8 main Louvre exhibits, via camera scan |
 | [WebXR](https://webxr-worldmodels.vercel.app) | Remote multiplayer WebXR tour | Only the 3 Jardin des Tuileries Gaussian splats — see [Splat Identification](#splat-identification) |
+
+MuseXR-Android is built on the **Meta Wearables Device Access Toolkit (DAT)** for pairing with the glasses and pulling frames from their camera; from this backend's point of view it's just another `POST /ask` caller sending `image_base64`, indistinguishable from `demo.html`'s requests.
 
 The WebXR frontend's default scene is the Jardin des Tuileries, not the Louvre building, so its Sophie guide only needs to recognize the three Maillol splats there (`Air`, `La Nuit`, `L'Hommage à Cézanne`). That scoping is encoded in `splat_mapping.json`'s aliases on the frontend-facing side — the underlying `/ask`, `/splats`, and image-recognition endpoints can resolve any of the 12 exhibits regardless of which client calls them.
 
@@ -420,7 +422,7 @@ async function askSophie(question) {
 netblocksRoom.on('sophie_audio', ({ url }) => new Audio(url).play());
 ```
 
-Sophie's voice is generated with **OpenAI TTS** (`tts-1`, `nova` by default), configurable via the `SOPHIE_VOICE` environment variable (`alloy` \| `echo` \| `fable` \| `onyx` \| `nova` \| `shimmer`). `audio_url` is a full HTTPS URL fetchable by all room members without a proxy; audio files are stored temporarily on the server (consider S3 or similar for a larger-scale deployment). Native clients (Unity/Quest) are not subject to CORS.
+Sophie's voice is generated with **OpenAI TTS** (`tts-1`, `nova` by default), configurable via the `SOPHIE_VOICE` environment variable (`alloy` \| `echo` \| `fable` \| `onyx` \| `nova` \| `shimmer`). `audio_url` is a full HTTPS URL fetchable by all room members without a proxy; audio files are stored temporarily on the server (consider S3 or similar for a larger-scale deployment). Native clients (e.g. MuseXR-Android) are not subject to CORS.
 
 ### Demo web app (`demo.html`)
 
