@@ -20,4 +20,7 @@ COPY . .
 ENV PORT=8000
 EXPOSE $PORT
 
-CMD uvicorn server:app --host 0.0.0.0 --port $PORT
+# --proxy-headers + --forwarded-allow-ips='*': Railway sits behind a proxy, so
+# uvicorn must trust its X-Forwarded-For to see real client IPs (needed for
+# per-IP rate limiting in server.py — otherwise every request looks the same).
+CMD uvicorn server:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'

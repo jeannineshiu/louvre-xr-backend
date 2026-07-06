@@ -18,6 +18,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 from typing import Literal
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from pathlib import Path
 
 from openai import OpenAI
@@ -136,6 +140,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ContextAR", version="0.2.0", lifespan=lifespan)
 
+# Per-IP rate limiting — this backend is publicly reachable for demo/testing and
+# every OpenAI call (Vision recognition, RAG chat completion, Whisper, TTS) is
+# billed to a single shared API key, so unbounded public traffic is a cost risk
+# rather than just a load-testing concern. Limits below are per-endpoint since
+# /ask is the most expensive (Vision + embeddings + chat) and /transcribe is the
+# cheapest. Tune via the OpenAI dashboard's own hard spending cap as the backstop.
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Explicit allow-list — the production WebXR front end plus local dev origins.
 # Using explicit origins (not "*") so credentialed requests keep working.
 ALLOWED_ORIGINS = [
@@ -161,6 +175,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 @app.post("/ask", response_model=AskResponse)
+@limiter.limit("20/hour")
 def ask(req: AskRequest, request: Request):
     """
     QA endpoint. Three usage patterns:
@@ -223,7 +238,8 @@ def ask(req: AskRequest, request: Request):
 
 
 @app.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe(file: UploadFile = File(...)):
+@limiter.limit("30/hour")
+async def transcribe(request: Request, file: UploadFile = File(...)):
     """
     Speech-to-text for multiplayer VR voice questions.
 
@@ -279,6 +295,7 @@ def demo():
 
 
 @app.post("/session/start", response_model=SessionStartResponse)
+@limiter.limit("30/hour")
 def session_start(req: SessionStartRequest, request: Request):
     """
     Generate Sophie's welcome greeting when a visitor joins a multiplayer room.

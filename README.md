@@ -166,6 +166,8 @@ The FAISS index is pre-built and committed — no rebuild needed for local devel
 
 The core Q&A endpoint. Resolves the exhibit, retrieves grounded knowledge, and returns an answer.
 
+**Rate limit:** 20 requests/hour per IP. Exceeding it returns HTTP `429`. See [API Usage Limits](#api-usage-limits).
+
 **Request fields**
 
 | Field | Type | Required | Notes |
@@ -221,6 +223,8 @@ curl -X POST <BASE_URL>/ask \
 ### `POST /transcribe`
 
 Speech-to-text for voice questions. The frontend records audio with `MediaRecorder` and posts the blob here; the server forwards it to **OpenAI Whisper** (`whisper-1`) and returns the transcript. Used in the multi-user WebXR flow, where the native Web Speech API isn't always available.
+
+**Rate limit:** 30 requests/hour per IP. Exceeding it returns HTTP `429`. See [API Usage Limits](#api-usage-limits).
 
 **Request:** `multipart/form-data`
 
@@ -294,6 +298,8 @@ curl "<BASE_URL>/splats"   # full alias → exhibit-name mapping
 
 Generates Sophie's welcome greeting (one short sentence, max ~20 words) when visitors join a shared WebXR room. Call once per room entry and broadcast the result to all members.
 
+**Rate limit:** 30 requests/hour per IP. Exceeding it returns HTTP `429`. See [API Usage Limits](#api-usage-limits).
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `exhibit` | `string` | No | Exhibit name, if already known — Sophie references it in the greeting. |
@@ -320,6 +326,22 @@ Returns the browser demo page (`demo.html`) — see [Multi-User / WebXR Integrat
 ### `GET /health`
 
 `{ "status": "ok" }` — liveness check.
+
+---
+
+## API Usage Limits
+
+`/ask`, `/transcribe`, and `/session/start` each call OpenAI (GPT-4o Vision, RAG chat completion, Whisper, or TTS), billed to a single shared `OPENAI_API_KEY`. Since this backend is reachable by the public for demo/testing, each of those endpoints is rate-limited **per client IP** to cap cost exposure:
+
+| Endpoint | Limit |
+|---|---|
+| `POST /ask` | 20 requests/hour |
+| `POST /transcribe` | 30 requests/hour |
+| `POST /session/start` | 30 requests/hour |
+
+Exceeding a limit returns HTTP `429`; the frontend should treat this as "try again later" rather than a hard error. Limits are enforced in-process (in-memory, via [slowapi](https://github.com/laurentS/slowapi)) — fine for a single Railway instance, but if this service is ever scaled to multiple replicas or workers, each process counts independently, so the effective limit multiplies per instance.
+
+These limits are a backstop, not a substitute for capping spend on the OpenAI key itself — set a hard spending limit on `OPENAI_API_KEY` in the [OpenAI dashboard](https://platform.openai.com/settings/organization/limits).
 
 ---
 
@@ -482,6 +504,8 @@ Deployed on Railway via the included `Dockerfile`; redeploys automatically on ev
 | Environment variable | Value |
 |---|---|
 | `OPENAI_API_KEY` | Your OpenAI API key (`sk-...`) |
+
+Since this backend is publicly reachable, set a hard spending limit on `OPENAI_API_KEY` in the OpenAI dashboard before sharing the URL — the per-IP rate limits in this repo (see [API Usage Limits](#api-usage-limits)) reduce but don't eliminate cost exposure from public traffic.
 
 Rebuild the FAISS index only after editing `exhibits_data.py`:
 
