@@ -17,8 +17,11 @@ Note: noise does not affect mode — audio is delivered via earphones.
 crowd accepts "low" or "crowded"; any other value is treated as "low".
 """
 
+import logging
 from dataclasses import dataclass
 from rag_engine import RAGEngine
+
+logger = logging.getLogger(__name__)
 
 # Per-mode hard character caps (safety net — prompts already guide length)
 # GLANCE_CARD: ~20 words ≈ 120 chars → cap at 160
@@ -101,6 +104,7 @@ def route(question: str, rag: RAGEngine, state: dict, history: list[dict] | None
         RouterDecision with mode, answer, xr_action, and reason
     """
     mode, reason, xr_action = _decide_mode(state)
+    logger.info("router_decision", extra={"mode": mode, "reason": reason})
 
     if mode == "NO_RESPONSE":
         return RouterDecision(mode=mode, answer="", xr_action=xr_action, reason=reason)

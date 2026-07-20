@@ -13,6 +13,7 @@ Usage (standalone test):
     python qa_pipeline.py
 """
 
+import logging
 import re
 
 import base64
@@ -23,6 +24,8 @@ from exhibit_recognizer import recognize_exhibit
 from rag_engine import RAGEngine
 from context_router import route, MODE_MAX_LENGTH
 from navigation_routes import ROUTES, EXHIBIT_NAMES
+
+logger = logging.getLogger(__name__)
 
 
 def _b64_to_frame(image_b64: str) -> np.ndarray | None:
@@ -144,12 +147,18 @@ def run(
         if frame is not None:
             image_scanned = True
             recognition = recognize_exhibit(frame, detail="high")
-            if (
-                "error" not in recognition
-                and recognition.get("confidence") == "high"
+            if "error" in recognition:
+                logger.warning("exhibit_recognition_error", extra={"error": recognition["error"]})
+            elif (
+                recognition.get("confidence") == "high"
                 and recognition.get("name", "unknown").lower() != "unknown"
             ):
                 exhibit_name = recognition["name"]
+            else:
+                logger.info("exhibit_recognition_no_match", extra={
+                    "confidence": recognition.get("confidence"),
+                    "name":       recognition.get("name"),
+                })
 
     # If an image was scanned but not matched to any of the recognised sculptures
     # (and the frontend didn't tell us which exhibit it is), return a clear

@@ -6,6 +6,7 @@ structured information about the exhibit shown.
 
 import base64
 import json
+import logging
 import os
 import cv2
 import numpy as np
@@ -13,6 +14,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 def _get_client() -> OpenAI:
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -143,8 +146,10 @@ def recognize_exhibit(image: np.ndarray | str, detail: str = "low") -> dict:
         return json.loads(raw)
 
     except json.JSONDecodeError:
+        logger.warning("vision_invalid_response", extra={"raw": raw})
         return {"error": "invalid_response", "raw": raw}
     except Exception as e:
+        logger.exception("vision_call_failed")
         return {"error": str(e)}
 
 
