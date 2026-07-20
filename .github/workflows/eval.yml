@@ -34,6 +34,11 @@ jobs:
           pip install ruff
           ruff check .
 
+      - name: Dependency vulnerability scan (no API calls, fails fast)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
       - name: Unit tests (no API calls, fails fast)
         run: python -m pytest tests/ -q
 
