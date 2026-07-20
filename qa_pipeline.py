@@ -13,6 +13,8 @@ Usage (standalone test):
     python qa_pipeline.py
 """
 
+import re
+
 import base64
 import numpy as np
 import cv2
@@ -20,6 +22,7 @@ import cv2
 from exhibit_recognizer import recognize_exhibit
 from rag_engine import RAGEngine
 from context_router import route, MODE_MAX_LENGTH
+from navigation_routes import ROUTES, EXHIBIT_NAMES
 
 
 def _b64_to_frame(image_b64: str) -> np.ndarray | None:
@@ -33,6 +36,64 @@ def _b64_to_frame(image_b64: str) -> np.ndarray | None:
 
 
 DEFAULT_MODE = "FULL_VOICE"
+
+
+# ---------------------------------------------------------------------------
+# NAVIGATION mode — deterministic dict lookup, no LLM.
+#
+# The RAG index has no room/wing/floor data (see rag_engine.py), so routing
+# NAVIGATION questions through the LLM produced fluent, plausible, and WRONG
+# room numbers. Real directions live in navigation_routes.ROUTES; this just
+# resolves which two exhibits the visitor means and looks the route up.
+# ---------------------------------------------------------------------------
+
+_NAME_TO_ID = {name.lower(): eid for eid, name in EXHIBIT_NAMES.items()}
+
+_NAVIGATION_HELP = (
+    "I can give walking directions between these galleries: "
+    + ", ".join(EXHIBIT_NAMES.values())
+    + ". Let me know which one you're standing at and which one you'd like to reach."
+)
+
+
+def _matched_exhibit_ids(text: str) -> list[tuple[str, str]]:
+    """(name, id) pairs whose name appears in text, longest name first."""
+    text_low = text.lower()
+    hits = {eid: name for name, eid in _NAME_TO_ID.items() if name in text_low}
+    return sorted(hits.items(), key=lambda pair: len(pair[1]), reverse=True)
+
+
+def _navigation_answer(question: str, known_from_name: str | None) -> str:
+    """Resolve (from, to) exhibit ids from the question + known position, and
+    return the deterministic directions from navigation_routes.ROUTES. Declines
+    with a clarifying message rather than guessing when either end is ambiguous."""
+    candidates = _matched_exhibit_ids(question)
+    matched_ids = [eid for eid, _ in candidates]
+
+    from_id = _NAME_TO_ID.get((known_from_name or "").lower())
+    to_id = None
+
+    if from_id:
+        others = [eid for eid in matched_ids if eid != from_id]
+        to_id = others[0] if others else None
+    else:
+        text_low = question.lower()
+        from_match = re.search(r"from\s+(.+?)(?:\s+to\s+|$)", text_low)
+        to_match = re.search(r"\bto\s+(.+?)(?:\s+from\s+|$)", text_low)
+        for eid, name in candidates:
+            if from_match and name in from_match.group(1):
+                from_id = from_id or eid
+            if to_match and name in to_match.group(1):
+                to_id = to_id or eid
+
+    if not from_id or not to_id:
+        return _NAVIGATION_HELP
+
+    if from_id == to_id:
+        return f"You are already at {EXHIBIT_NAMES[from_id]}."
+
+    directions = ROUTES.get((from_id, to_id))
+    return directions if directions else _NAVIGATION_HELP
 
 
 def run(
@@ -114,6 +175,14 @@ def run(
     )
 
     # Step 3: Decide mode and generate answer
+    if mode == "NAVIGATION":
+        # Deterministic route lookup — never goes through the RAG/LLM path.
+        return {
+            "mode":    mode,
+            "answer":  _navigation_answer(question, exhibit_name),
+            "exhibit": exhibit_name,
+        }
+
     if mode:
         # Direct override — skip context router entirely
         max_len = MODE_MAX_LENGTH.get(mode)

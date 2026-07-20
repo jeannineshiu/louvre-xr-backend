@@ -109,22 +109,13 @@ PROMPT_BRIEF_TEXT_PROMPT = PromptTemplate(
     ),
 )
 
-# NAVIGATION — visitor is asking for walking directions between sculptures
-# Target: directions only, no art history, no shop info, max ~3 sentences.
-PROMPT_NAVIGATION = PromptTemplate(
-    input_variables=["context", "question"],
-    template=(
-        "You are Sophie, a visitor guide for the Louvre Museum and surrounding areas.\n\n"
-        "Location data:\n{context}\n\n"
-        "Visitor question: {question}\n\n"
-        "Language: detect the language of the visitor's question and respond in that same language.\n\n"
-        "Answer ONLY with walking directions. "
-        "Include room numbers, wing names, floor level, and estimated walking time. "
-        "Do NOT add art history, sculpture descriptions, shop information, or any other content. "
-        "Maximum 3 sentences.\n\n"
-        "Directions:"
-    ),
-)
+# NOTE: there is no NAVIGATION prompt here on purpose. Walking directions are
+# answered from navigation_routes.py's deterministic (from_id, to_id) lookup
+# table (see qa_pipeline._navigation_answer), not from this RAG index — the
+# exhibit documents below don't contain room/wing data, so routing this mode
+# through the LLM produced confident, plausible-sounding, and WRONG room
+# numbers. See eval/golden_set.jsonl "navigation_grounding" for the regression
+# test that caught this.
 
 # SHOP — visitor is asking about merchandise, souvenirs, replicas, or where to buy
 # Target: product info + URL only, no art history, max ~3 sentences.
@@ -150,12 +141,44 @@ _PROMPTS = {
     "BRIEF_TEXT":         PROMPT_BRIEF_TEXT,
     "FULL_VOICE":         PROMPT_FULL_VOICE,
     "BRIEF_TEXT_PROMPT":  PROMPT_BRIEF_TEXT_PROMPT,
-    "NAVIGATION":         PROMPT_NAVIGATION,
     "SHOP":               PROMPT_SHOP,
 }
 
 # Fallback for any unrecognised mode
 _DEFAULT_PROMPT = PROMPT_BRIEF_TEXT
+
+# FAISS L2 distance below which a retrieved exhibit counts as "actually relevant".
+# Also used as the out-of-scope gate: if nothing clears this bar, the question
+# isn't about any of our 12 exhibits and we should decline rather than let the
+# LLM answer from general world knowledge (see eval/golden_set.jsonl
+# "out_of_scope_capital" / "out_of_scope_unknown_exhibit" — both hallucinated
+# grounded-sounding answers before this gate was added).
+#
+# Empirically calibrated on text-embedding-3-small via similarity_search_with_score()
+# on a handful of probe queries:
+#   on-topic top-1 distances:  0.555–0.648 (top-2: up to 0.880)
+#   off-topic top-1 distances: 1.084 (Mona Lisa — a real but out-of-scope artwork,
+#                               close enough in embedding space to slip past a loose
+#                               threshold) – 1.572 (unrelated general knowledge)
+# 1.3 let the Mona Lisa case through; 1.0 sits in the gap between the two clusters.
+# If this starts false-declining legitimate questions, re-probe with
+# rag._vectorstore.similarity_search_with_score(query, k=2) on a wider set of
+# real/adversarial queries and re-justify the number from fresh distances —
+# don't hand-tune it without data.
+_RELEVANCE_THRESHOLD = 1.0
+
+_OUT_OF_SCOPE_ANSWER = (
+    "I'm not able to help with that — I only know about the sculptures in this "
+    "collection: " + ", ".join(e["name"] for e in EXHIBITS) + ". "
+    "Ask me about one of those, or point your camera at a sculpture."
+)
+
+# How many recent history messages get folded into the *retrieval* query (not
+# the final LLM prompt, which still sees the full history). Needed because a
+# bare follow-up like "what else can you tell me about it?" embeds nowhere
+# near the exhibit it refers to — see eval/golden_set.jsonl
+# "history_followup_no_repeat".
+_RETRIEVAL_HISTORY_WINDOW = 4
 
 # Mode-specific instruction strings for the history-aware path
 _MODE_INSTRUCTIONS = {
@@ -177,11 +200,6 @@ _MODE_INSTRUCTIONS = {
         "Answer in 2–3 sentences (around 50 words). "
         "At the end, add one friendly sentence suggesting the visitor find a quieter spot "
         "for a more complete audio guide experience."
-    ),
-    "NAVIGATION": (
-        "Answer ONLY with walking directions. "
-        "Include room numbers, wing names, floor level, and estimated walking time. "
-        "Do NOT add art history, descriptions, or any other content. Maximum 3 sentences."
     ),
     "SHOP": (
         "Answer ONLY with merchandise information: available products, prices, sizes, and the shop URL. "
@@ -213,7 +231,8 @@ def build_index() -> FAISS:
             f"Name: {exhibit['name']}\n"
             f"Artist: {exhibit.get('artist', 'Unknown')}\n"
             f"Year: {exhibit.get('year', 'Unknown')}\n"
-            f"Period: {exhibit['period']}\n\n"
+            f"Period: {exhibit['period']}\n"
+            f"Location: {exhibit.get('location', 'Unknown')}\n\n"
             f"Key facts: {sections['key_facts']}\n\n"
             f"What you see: {sections['visual_description']}\n\n"
             f"Historical context: {sections['historical_context']}\n\n"
@@ -225,11 +244,12 @@ def build_index() -> FAISS:
         docs.append(Document(
             page_content=text,
             metadata={
-                "id":     exhibit["id"],
-                "name":   exhibit["name"],
-                "artist": exhibit.get("artist", "Unknown"),
-                "year":   exhibit.get("year", "Unknown"),
-                "period": exhibit["period"],
+                "id":       exhibit["id"],
+                "name":     exhibit["name"],
+                "artist":   exhibit.get("artist", "Unknown"),
+                "year":     exhibit.get("year", "Unknown"),
+                "period":   exhibit["period"],
+                "location": exhibit.get("location", "Unknown"),
             }
         ))
 
@@ -317,6 +337,12 @@ class RAGEngine:
         if history:
             return self._query_with_history(question, mode, max_length, history)
 
+        scored = self._vectorstore.similarity_search_with_score(question, k=2)
+        sources = [doc.metadata["name"] for doc, score in scored if score < _RELEVANCE_THRESHOLD]
+
+        if not sources:
+            return {"answer": _OUT_OF_SCOPE_ANSWER, "sources": []}
+
         chain = self._chains.get(mode, self._chains["BRIEF_TEXT"])
         result = chain.invoke({"query": question})
         answer = result["result"].strip()
@@ -324,19 +350,24 @@ class RAGEngine:
         if max_length and len(answer) > max_length:
             answer = answer[:max_length].rsplit(" ", 1)[0] + "…"
 
-        scored = self._vectorstore.similarity_search_with_score(question, k=2)
-        sources = [
-            doc.metadata["name"]
-            for doc, score in scored
-            if score < 1.3
-        ]
         return {"answer": answer, "sources": sources}
 
     def _query_with_history(self, question: str, mode: str,
                             max_length: int | None, history: list[dict]) -> dict:
         """History-aware query: retrieves docs, then calls GPT-4o with full conversation context."""
-        # Retrieve relevant exhibit docs
-        docs = self._vectorstore.similarity_search(question, k=2)
+        # Retrieve relevant exhibit docs. Fold in the last few history messages so a
+        # pronoun-only follow-up ("what else can you tell me about it?") still embeds
+        # close to the exhibit being discussed, instead of searching on "it" alone.
+        recent = history[-_RETRIEVAL_HISTORY_WINDOW:]
+        retrieval_query = " ".join(m["content"] for m in recent) + " " + question
+
+        scored = self._vectorstore.similarity_search_with_score(retrieval_query, k=2)
+        sources = [doc.metadata["name"] for doc, score in scored if score < _RELEVANCE_THRESHOLD]
+
+        if not sources:
+            return {"answer": _OUT_OF_SCOPE_ANSWER, "sources": []}
+
+        docs = [doc for doc, _ in scored]
         context = "\n\n---\n\n".join(doc.page_content for doc in docs)
 
         instructions = _MODE_INSTRUCTIONS.get(mode, _MODE_INSTRUCTIONS["BRIEF_TEXT"])
@@ -368,7 +399,6 @@ class RAGEngine:
         if max_length and len(answer) > max_length:
             answer = answer[:max_length].rsplit(" ", 1)[0] + "…"
 
-        sources = [doc.metadata["name"] for doc in docs]
         return {"answer": answer, "sources": sources}
 
     def find_similar(self, exhibit_name: str, k: int = 2) -> list[str]:
