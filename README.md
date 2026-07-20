@@ -2,7 +2,7 @@
 
 FastAPI backend for **MuseXR**, an AI museum-guide platform for the Louvre. It handles exhibit recognition, RAG-based Q&A, and voice, shared across three independent frontends — a browser demo, a Meta AI Glasses app, and a multiplayer WebXR tour (where the guide is named **Sophie**).
 
-**Status:** Production — feature-complete, tested, and integrated across all three client frontends. Deployed on Railway with automatic redeploy on push to `main`.
+**Status:** Production — feature-complete and integrated across all three client frontends. Deployed on Railway with automatic redeploy on push to `main`; the RAG chatbot's answer quality is checked by an eval harness (`eval/`) gated in CI on every PR (see `.github/workflows/eval.yml`).
 
 Core exhibition: **Louvre Museum, Paris** — eight sculptures spanning antiquity to the 19th century, plus four supplementary works (Jardin des Tuileries and a Sydney field-demo piece) that support the full feature set outside the main museum building.
 
