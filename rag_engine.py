@@ -146,20 +146,18 @@ def _system_prompt(mode: str, context: str) -> str:
 # "out_of_scope_capital" / "out_of_scope_unknown_exhibit" — both hallucinated
 # grounded-sounding answers before this gate was added).
 #
-# NOT YET RE-CALIBRATED for section-chunk granularity. The 1.0 value below
-# was empirically calibrated (see git history) against the OLD one-doc-per-
-# exhibit index:
-#   on-topic top-1 distances:  0.555–0.648 (top-2: up to 0.880)
-#   off-topic top-1 distances: 1.084 (Mona Lisa) – 1.572 (unrelated)
-# Chunking exhibits into per-section Documents (see build_index) changes the
-# embedding distance distribution — individual sections are shorter and more
-# focused than a whole-exhibit blob, so distances will shift, direction
-# untested. Before shipping this threshold as final, run
-# `python -m eval.calibrate_threshold` (probes on-topic vs. off-topic
-# best-chunk distances against the live index and suggests a cutoff from the
-# actual gap — see eval/calibrate_threshold.py) and re-run eval/run_eval.py
-# (esp. the out_of_scope_* and retrieval_hit cases) — don't hand-tune it
-# without data.
+# RE-CALIBRATED for section-chunk granularity (2026-07-20, via
+# `python -m eval.calibrate_threshold` against the live per-section index):
+#   on-topic best-chunk distances:  0.349–0.925 (18 golden-set cases,
+#     NAVIGATION-mode and expect_decline cases excluded — they don't go
+#     through this gate; history cases probed with history folded in, same
+#     as _query_with_history)
+#   off-topic best-chunk distances: 1.018 (Sistine Chapel) – 1.767 (unrelated)
+# Clean separation with a gap of (0.925, 1.018) — 1.0 sits inside it and
+# correctly classified all 18 on-topic / 8 off-topic probes (0 false
+# declines, 0 false answers). Re-run `python -m eval.calibrate_threshold`
+# after any change to build_index()'s chunking or to exhibits_data.py that
+# meaningfully changes section content — don't hand-tune this without data.
 _RELEVANCE_THRESHOLD = 1.0
 
 _OUT_OF_SCOPE_ANSWER = (

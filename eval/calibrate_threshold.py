@@ -9,11 +9,12 @@ the embedding distance distribution shifts with chunk granularity, so the
 old 1.0 cutoff is unverified for the current index.
 
 This script does NOT change the threshold. It probes the live FAISS index
-with on-topic queries (from eval/golden_set.jsonl, excluding expect_decline
-cases) and off-topic/adversarial queries, prints the best-chunk L2 distance
-for each, and reports the gap between the on-topic and off-topic
-distributions so a human can pick a defensible cutoff from real numbers
-instead of hand-tuning it.
+with on-topic queries (from eval/golden_set.jsonl, reproducing exactly what
+RAGEngine._retrieve() is actually called with in production — see
+_load_on_topic_queries) and off-topic/adversarial queries, prints the
+best-chunk L2 distance for each, and reports the gap between the on-topic
+and off-topic distributions so a human can pick a defensible cutoff from
+real numbers instead of hand-tuning it.
 
 Costs money: each query is one OpenAI embedding call. Requires
 OPENAI_API_KEY.
@@ -27,7 +28,7 @@ import argparse
 import json
 from pathlib import Path
 
-from rag_engine import _group_by_exhibit, get_or_build_index
+from rag_engine import _RETRIEVAL_HISTORY_WINDOW, _group_by_exhibit, get_or_build_index
 
 GOLDEN_SET_PATH = Path(__file__).parent / "golden_set.jsonl"
 
@@ -46,8 +47,16 @@ OFF_TOPIC_QUERIES = [
 
 
 def _load_on_topic_queries() -> list[tuple[str, str]]:
-    """(id, question) pairs from the golden set, skipping expect_decline cases
-    (those are supposed to score like off-topic queries)."""
+    """(id, retrieval_query) pairs from the golden set, mirroring exactly what
+    RAGEngine._retrieve() would actually be called with in production:
+      - skips expect_decline cases (those are supposed to score like off-topic)
+      - skips NAVIGATION-mode cases (they bypass RAG/_retrieve() entirely —
+        see qa_pipeline._navigation_answer — so their embedding distance is
+        meaningless here)
+      - for history cases, folds in the last _RETRIEVAL_HISTORY_WINDOW turns
+        the same way _query_with_history does, since a bare pronoun-only
+        follow-up embeds nowhere near the exhibit on its own by design
+    """
     queries = []
     with open(GOLDEN_SET_PATH) as f:
         for line in f:
@@ -55,8 +64,15 @@ def _load_on_topic_queries() -> list[tuple[str, str]]:
             if not line:
                 continue
             case = json.loads(line)
-            if not case.get("expect_decline"):
-                queries.append((case["id"], case["question"]))
+            if case.get("expect_decline") or case.get("mode") == "NAVIGATION":
+                continue
+            history = case.get("history")
+            if history:
+                recent = history[-_RETRIEVAL_HISTORY_WINDOW:]
+                retrieval_query = " ".join(m["content"] for m in recent) + " " + case["question"]
+            else:
+                retrieval_query = case["question"]
+            queries.append((case["id"], retrieval_query))
     return queries
 
 
@@ -76,10 +92,10 @@ def main():
 
     print("\n-- On-topic (golden set) --")
     on_topic_scores = []
-    for case_id, question in _load_on_topic_queries():
-        dist = _best_distance(vectorstore, question)
+    for case_id, retrieval_query in _load_on_topic_queries():
+        dist = _best_distance(vectorstore, retrieval_query)
         on_topic_scores.append(dist)
-        print(f"  {dist:.3f}  {case_id}: {question}")
+        print(f"  {dist:.3f}  {case_id}: {retrieval_query}")
 
     print("\n-- Off-topic (adversarial) --")
     off_topic_scores = []
