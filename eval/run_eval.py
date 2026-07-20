@@ -184,7 +184,18 @@ def run(cases: list[dict], use_judge: bool = True, case_filter: str | None = Non
                 retrieval_query = " ".join(m["content"] for m in recent) + " " + case["question"]
             else:
                 retrieval_query = case["question"]
-            docs = rag._vectorstore.similarity_search(retrieval_query, k=2)
+            # Use RAGEngine._retrieve() itself — same k, same per-exhibit grouping,
+            # same relevance filtering — instead of a separate raw similarity_search.
+            # A previous version called similarity_search(retrieval_query, k=2)
+            # directly, which under-sampled relative to what _answer()/
+            # _query_with_history() actually hand the LLM (multiple sections per
+            # matched exhibit, via _RETRIEVAL_K=8 grouped by exhibit). That
+            # produced false "ungrounded" judge verdicts whenever the real answer
+            # correctly used a fact from a section outside the top-2 nearest
+            # neighbours (e.g. a commission detail in key_facts when the top-2
+            # chunks were story + technique) — see eval/results/ for the
+            # 2026-07-20 eval-full run this was caught in.
+            docs, _ = rag._retrieve(retrieval_query)
             context = "\n\n---\n\n".join(d.page_content for d in docs)
             judge = llm_judge(client, case["question"], case["mode"], context, result["answer"])
             if judge.get("score") is not None:
