@@ -13,31 +13,28 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from pydantic import BaseModel, field_validator
+from pathlib import Path
 from typing import Literal
 
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-
-from pathlib import Path
-
-from openai import OpenAI
-from langchain_openai import ChatOpenAI
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from openai import OpenAI
+from pydantic import BaseModel, field_validator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
-from rag_engine import RAGEngine
-from navigation_routes import ROUTES, EXHIBIT_NAMES
-from exhibits_data import EXHIBITS
-from splat_registry import resolve_splat, list_mapping
-from tts import generate_sophie_audio
-from logging_config import configure_logging
-from cache import TTLCache
 import qa_pipeline
+from cache import TTLCache
+from exhibits_data import EXHIBITS
+from logging_config import configure_logging
+from navigation_routes import EXHIBIT_NAMES, ROUTES
+from rag_engine import RAGEngine
+from splat_registry import list_mapping, resolve_splat
+from tts import generate_sophie_audio
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -382,10 +379,12 @@ def session_start(req: SessionStartRequest, request: Request):
 
 
 @app.get("/tts-debug")
-def tts_debug():
+@limiter.limit("5/hour")
+def tts_debug(request: Request):
     """Test OpenAI TTS connection and report status."""
     import os
-    from tts import generate_sophie_audio, SOPHIE_VOICE
+
+    from tts import SOPHIE_VOICE, generate_sophie_audio
     key   = os.environ.get("OPENAI_API_KEY", "")
     if not key:
         return {"status": "error", "reason": "OPENAI_API_KEY not set"}
@@ -422,6 +421,7 @@ def health():
 
 if __name__ == "__main__":
     import os
+
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)
