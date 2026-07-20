@@ -468,7 +468,7 @@ if __name__ == "__main__":
         print(f"\n[{args.mode}] Answer: {result['answer']}")
         print(f"Sources: {', '.join(result['sources'])}")
 
-    if not args.build and not args.query:
+    if not args.build and not args.query and not args.check_fresh:
         rag = RAGEngine()
         print("ContextAR RAG — type a question, Ctrl+C to quit\n")
         while True:
