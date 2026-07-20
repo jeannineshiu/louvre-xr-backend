@@ -175,9 +175,25 @@ app = FastAPI(title="ContextAR", version="0.2.0", lifespan=lifespan)
 # rather than just a load-testing concern. Limits below are per-endpoint since
 # /ask is the most expensive (Vision + embeddings + chat) and /transcribe is the
 # cheapest. Tune via the OpenAI dashboard's own hard spending cap as the backstop.
-limiter = Limiter(key_func=get_remote_address)
+#
+# Storage backend: in-memory (the default, one counter dict per process) works
+# fine for a single Railway replica, but silently stops enforcing anything
+# meaningful the moment there's more than one — each replica only sees its own
+# slice of traffic, so N replicas effectively multiplies every limit by N. If
+# REDIS_URL is set, counters live in Redis instead and are shared across every
+# replica; if unset, this falls back to the original in-memory behavior so
+# local dev needs no Redis. in_memory_fallback_enabled=True means a transient
+# Redis outage degrades to per-instance limiting (same as before Redis was
+# added) rather than making every request 500.
+_REDIS_URL = os.environ.get("REDIS_URL")
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=_REDIS_URL or "memory://",
+    in_memory_fallback_enabled=bool(_REDIS_URL),
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+logger.info("rate_limit_backend", extra={"backend": "redis" if _REDIS_URL else "memory"})
 
 # Explicit allow-list — the production WebXR front end plus local dev origins.
 # Using explicit origins (not "*") so credentialed requests keep working.

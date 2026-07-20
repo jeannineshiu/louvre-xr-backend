@@ -351,8 +351,14 @@ Returns the browser demo page (`demo.html`) — see [Multi-User / WebXR Integrat
 | `POST /ask` | 20 requests/hour |
 | `POST /transcribe` | 30 requests/hour |
 | `POST /session/start` | 30 requests/hour |
+| `GET /tts-debug` | 5 requests/hour |
 
-Exceeding a limit returns HTTP `429`; the frontend should treat this as "try again later" rather than a hard error. Limits are enforced in-process (in-memory, via [slowapi](https://github.com/laurentS/slowapi)) — fine for a single Railway instance, but if this service is ever scaled to multiple replicas or workers, each process counts independently, so the effective limit multiplies per instance.
+Exceeding a limit returns HTTP `429`; the frontend should treat this as "try again later" rather than a hard error. Limits are enforced via [slowapi](https://github.com/laurentS/slowapi) with a pluggable storage backend, controlled by `REDIS_URL`:
+
+- **Unset (default):** in-memory counters — fine for a single Railway replica/worker, but each process counts independently, so scaling to N replicas effectively multiplies every limit by N.
+- **Set:** counters live in Redis instead, shared across every replica — the limits in the table above hold regardless of replica count. A transient Redis outage degrades gracefully back to per-instance in-memory limiting (`in_memory_fallback_enabled=True`) rather than 500ing every request.
+
+This repo doesn't provision Redis itself — add a Redis instance (e.g. Railway's Redis plugin) and set `REDIS_URL` if/when this service runs more than one replica.
 
 These limits are a backstop, not a substitute for capping spend on the OpenAI key itself — set a hard spending limit on `OPENAI_API_KEY` in the [OpenAI dashboard](https://platform.openai.com/settings/organization/limits).
 
@@ -520,6 +526,7 @@ Deployed on Railway via the included `Dockerfile`; redeploys automatically on ev
 | `SENTRY_DSN` | Optional — enables error tracking (see below). Unset = disabled. |
 | `SENTRY_ENVIRONMENT` | Optional, default `production` |
 | `SENTRY_TRACES_SAMPLE_RATE` | Optional, default `0.1` |
+| `REDIS_URL` | Optional — shares rate-limit counters across replicas (see [API Usage Limits](#api-usage-limits)). Unset = in-memory, per-replica. |
 
 Since this backend is publicly reachable, set a hard spending limit on `OPENAI_API_KEY` in the OpenAI dashboard before sharing the URL — the per-IP rate limits in this repo (see [API Usage Limits](#api-usage-limits)) reduce but don't eliminate cost exposure from public traffic.
 
