@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import logging
 import os
+import re
 import sys
 
 from dotenv import load_dotenv
@@ -243,33 +244,78 @@ def is_index_fresh() -> bool:
         return f.read().strip() == _source_hash()
 
 
+def _exhibit_documents(exhibit: dict) -> list[Document]:
+    """One Document per non-empty section of a single exhibit. Factored out
+    of build_index() so the exact-match lookup below (_DOCS_BY_ID) can get
+    the same chunks the FAISS index holds without needing a vectorstore or
+    any embedding calls."""
+    base_meta = {
+        "id":       exhibit["id"],
+        "name":     exhibit["name"],
+        "artist":   exhibit.get("artist", "Unknown"),
+        "year":     exhibit.get("year", "Unknown"),
+        "period":   exhibit["period"],
+        "location": exhibit.get("location", "Unknown"),
+    }
+    header = (
+        f"Name: {exhibit['name']}\n"
+        f"Artist: {exhibit.get('artist', 'Unknown')}\n"
+        f"Year: {exhibit.get('year', 'Unknown')}\n"
+        f"Period: {exhibit['period']}\n"
+        f"Location: {exhibit.get('location', 'Unknown')}"
+    )
+    docs = []
+    for field, label in _SECTION_FIELDS:
+        value = exhibit.get(field, "")
+        if not value:
+            continue
+        docs.append(Document(
+            page_content=f"{header}\n\n{label}: {value}",
+            metadata={**base_meta, "section": field},
+        ))
+    return docs
+
+
+# Exhibit id → its section chunks / display name — pure Python, built once at
+# import time. Lets the exact-match short-circuit in _retrieve() hand back
+# full chunk content for a proper-noun hit without touching the vectorstore.
+_DOCS_BY_ID: dict[str, list[Document]] = {e["id"]: _exhibit_documents(e) for e in EXHIBITS}
+_EXHIBIT_NAMES: dict[str, str] = {e["id"]: e["name"] for e in EXHIBITS}
+
+
+def _proper_noun_patterns() -> list[tuple[re.Pattern, str]]:
+    """(\\b-bounded, case-insensitive pattern, exhibit id) pairs for every
+    exhibit name and named (non-"Unknown ...") artist. Dense embedding
+    similarity can under-rank a chunk whose relevance hinges on an exact
+    proper noun rather than general semantic overlap — this corpus is only
+    12 exhibits, so a cheap exact-match pass is a much better ROI here than
+    standing up a full BM25/RRF hybrid-search pipeline. See _retrieve()."""
+    patterns = []
+    for exhibit in EXHIBITS:
+        patterns.append((re.compile(r"\b" + re.escape(exhibit["name"].lower()) + r"\b"), exhibit["id"]))
+        artist = exhibit.get("artist", "")
+        if artist and not artist.lower().startswith("unknown"):
+            patterns.append((re.compile(r"\b" + re.escape(artist.lower()) + r"\b"), exhibit["id"]))
+    return patterns
+
+
+_PROPER_NOUN_PATTERNS = _proper_noun_patterns()
+
+
+def _exact_match_ids(query: str) -> list[str]:
+    """Exhibit ids whose name or artist appears verbatim (whole-word,
+    case-insensitive) in `query`, first-match order, deduped."""
+    q = query.lower()
+    ids: list[str] = []
+    for pattern, eid in _PROPER_NOUN_PATTERNS:
+        if eid not in ids and pattern.search(q):
+            ids.append(eid)
+    return ids
+
+
 def build_index() -> FAISS:
     """Convert EXHIBITS list → one LangChain Document per exhibit section → FAISS index."""
-    docs = []
-    for exhibit in EXHIBITS:
-        base_meta = {
-            "id":       exhibit["id"],
-            "name":     exhibit["name"],
-            "artist":   exhibit.get("artist", "Unknown"),
-            "year":     exhibit.get("year", "Unknown"),
-            "period":   exhibit["period"],
-            "location": exhibit.get("location", "Unknown"),
-        }
-        header = (
-            f"Name: {exhibit['name']}\n"
-            f"Artist: {exhibit.get('artist', 'Unknown')}\n"
-            f"Year: {exhibit.get('year', 'Unknown')}\n"
-            f"Period: {exhibit['period']}\n"
-            f"Location: {exhibit.get('location', 'Unknown')}"
-        )
-        for field, label in _SECTION_FIELDS:
-            value = exhibit.get(field, "")
-            if not value:
-                continue
-            docs.append(Document(
-                page_content=f"{header}\n\n{label}: {value}",
-                metadata={**base_meta, "section": field},
-            ))
+    docs = [doc for exhibit in EXHIBITS for doc in _exhibit_documents(exhibit)]
 
     embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
     vectorstore = FAISS.from_documents(docs, embeddings)
@@ -301,17 +347,18 @@ def get_or_build_index() -> FAISS:
     return build_index()
 
 
-def _group_by_exhibit(scored: list[tuple[Document, float]]) -> list[tuple[str, float, list[Document]]]:
+def _group_by_exhibit(scored: list[tuple[Document, float]]) -> list[tuple[str, str, float, list[Document]]]:
     """Group scored chunks by exhibit, keeping the best (lowest) score per
-    exhibit. Returns [(exhibit_name, best_score, chunks)], best exhibit first."""
+    exhibit. Returns [(exhibit_id, exhibit_name, best_score, chunks)], best
+    exhibit first."""
     groups: dict[str, dict] = {}
     for doc, score in scored:
         eid = doc.metadata["id"]
         group = groups.setdefault(eid, {"name": doc.metadata["name"], "best_score": score, "docs": []})
         group["docs"].append(doc)
         group["best_score"] = min(group["best_score"], score)
-    ordered = sorted(groups.values(), key=lambda g: g["best_score"])
-    return [(g["name"], g["best_score"], g["docs"]) for g in ordered]
+    ordered = sorted(groups.items(), key=lambda item: item[1]["best_score"])
+    return [(eid, g["name"], g["best_score"], g["docs"]) for eid, g in ordered]
 
 
 # ---------------------------------------------------------------------------
@@ -339,15 +386,28 @@ class RAGEngine:
         self._answer_cache = TTLCache(ttl_seconds=600, maxsize=512)
 
     def _retrieve(self, query: str) -> tuple[list[Document], list[str]]:
-        """Retrieve chunks for `query`, keeping only exhibits whose best chunk
-        clears _RELEVANCE_THRESHOLD. Returns (chunks, exhibit names) — chunks
-        span every matched exhibit's retrieved sections, exhibit names deduped
-        and ordered by relevance."""
+        """Retrieve chunks for `query`, keeping exhibits whose best chunk
+        clears _RELEVANCE_THRESHOLD, plus any exhibit whose name/artist is
+        mentioned verbatim in `query` even if dense search ranked it low or
+        missed it — see _proper_noun_patterns(). Exact matches are ordered
+        first (strongest relevance signal), then the rest of the dense
+        passes in score order. Returns (chunks, exhibit names), both deduped
+        by exhibit."""
         scored = self._vectorstore.similarity_search_with_score(query, k=_RETRIEVAL_K)
         groups = _group_by_exhibit(scored)
-        passing = [g for g in groups if g[1] < _RELEVANCE_THRESHOLD]
-        sources = [name for name, _, _ in passing]
-        docs = [doc for _, _, docs in passing for doc in docs]
+        dense_hits = {eid: (name, docs) for eid, name, score, docs in groups if score < _RELEVANCE_THRESHOLD}
+
+        ordered_ids = [eid for eid in _exact_match_ids(query)]
+        for eid in dense_hits:
+            if eid not in ordered_ids:
+                ordered_ids.append(eid)
+
+        sources = []
+        docs = []
+        for eid in ordered_ids:
+            name, exhibit_docs = dense_hits.get(eid, (_EXHIBIT_NAMES.get(eid), _DOCS_BY_ID.get(eid, [])))
+            sources.append(name)
+            docs.extend(exhibit_docs)
         return docs, sources
 
     def query(self, question: str, mode: str = "BRIEF_TEXT",

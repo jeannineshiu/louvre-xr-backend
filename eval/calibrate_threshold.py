@@ -79,7 +79,7 @@ def _load_on_topic_queries() -> list[tuple[str, str]]:
 def _best_distance(vectorstore, query: str) -> float:
     scored = vectorstore.similarity_search_with_score(query, k=8)
     groups = _group_by_exhibit(scored)
-    return groups[0][1] if groups else float("inf")
+    return groups[0][2] if groups else float("inf")
 
 
 def main():
