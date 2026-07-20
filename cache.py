@@ -10,7 +10,8 @@ often) rather than serving anything wrong.
 
 import threading
 import time
-from typing import Callable, Hashable, TypeVar
+from collections.abc import Callable, Hashable
+from typing import TypeVar
 
 T = TypeVar("T")
 

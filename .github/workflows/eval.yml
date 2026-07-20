@@ -29,6 +29,11 @@ jobs:
       - name: Syntax check (no API calls, fails fast)
         run: python -m py_compile rag_engine.py qa_pipeline.py context_router.py server.py navigation_routes.py exhibit_recognizer.py tts.py eval/run_eval.py
 
+      - name: Lint (ruff, no API calls, fails fast)
+        run: |
+          pip install ruff
+          ruff check .
+
       - name: Unit tests (no API calls, fails fast)
         run: python -m pytest tests/ -q
 

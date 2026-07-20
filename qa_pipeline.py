@@ -13,17 +13,17 @@ Usage (standalone test):
     python qa_pipeline.py
 """
 
+import base64
 import logging
 import re
 
-import base64
-import numpy as np
 import cv2
+import numpy as np
 
+from context_router import MODE_MAX_LENGTH, route
 from exhibit_recognizer import recognize_exhibit
+from navigation_routes import EXHIBIT_NAMES, ROUTES
 from rag_engine import RAGEngine
-from context_router import route, MODE_MAX_LENGTH
-from navigation_routes import ROUTES, EXHIBIT_NAMES
 
 logger = logging.getLogger(__name__)
 
