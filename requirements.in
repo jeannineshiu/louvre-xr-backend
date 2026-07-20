@@ -10,7 +10,7 @@
 fastapi==0.135.3
 uvicorn==0.44.0
 pydantic==2.13.0
-python-multipart==0.0.31  # required by FastAPI for multipart/form-data (file uploads)
+python-multipart==0.0.32  # required by FastAPI for multipart/form-data (file uploads)
 slowapi==0.1.10  # per-IP rate limiting, to cap public OpenAI usage
 
 # AI / LLM
