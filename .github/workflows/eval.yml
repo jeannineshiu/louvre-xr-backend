@@ -1,0 +1,46 @@
+name: RAG Eval
+
+# Gate for the RAG chatbot: runs on every PR into main so a prompt or
+# retrieval change that regresses answer quality is caught before merge,
+# not after Railway auto-deploys it to production.
+#
+# Deterministic checks only (--no-judge): retrieval hit, length budget,
+# markdown-free output, shop URL presence, required/forbidden substrings.
+# No LLM-judge here to keep every PR push cheap — the judge run lives in
+# eval-full.yml (scheduled + manual) instead. See that file for why.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Syntax check (no API calls, fails fast)
+        run: python -m py_compile rag_engine.py qa_pipeline.py context_router.py server.py navigation_routes.py exhibit_recognizer.py tts.py eval/run_eval.py
+
+      - name: Run eval harness (deterministic checks only)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python -m eval.run_eval --no-judge --fail-under 0.9
+        # Still makes real OpenAI calls (RAGEngine's own embeddings + gpt-4o
+        # chat completion per case) — that part can't be free, since it's
+        # exercising the actual answer-generation path. --no-judge only cuts
+        # the extra gpt-4o-mini grading call per case.
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval/results/
