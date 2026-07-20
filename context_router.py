@@ -19,6 +19,7 @@ crowd accepts "low" or "crowded"; any other value is treated as "low".
 
 import logging
 from dataclasses import dataclass
+
 from rag_engine import RAGEngine
 
 logger = logging.getLogger(__name__)

@@ -19,12 +19,12 @@ import hashlib
 import logging
 import os
 import sys
-from dotenv import load_dotenv
 
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from cache import TTLCache
 from exhibits_data import EXHIBITS
@@ -154,12 +154,12 @@ def _system_prompt(mode: str, context: str) -> str:
 # Chunking exhibits into per-section Documents (see build_index) changes the
 # embedding distance distribution — individual sections are shorter and more
 # focused than a whole-exhibit blob, so distances will shift, direction
-# untested. Before shipping this threshold as final, re-run
-# eval/run_eval.py (esp. the out_of_scope_* and retrieval_hit cases) and, if
-# it fails, re-probe with
-# rag._vectorstore.similarity_search_with_score(query, k=8) on a wider set of
-# real/adversarial queries and re-justify the number from fresh distances —
-# don't hand-tune it without data.
+# untested. Before shipping this threshold as final, run
+# `python -m eval.calibrate_threshold` (probes on-topic vs. off-topic
+# best-chunk distances against the live index and suggests a cutoff from the
+# actual gap — see eval/calibrate_threshold.py) and re-run eval/run_eval.py
+# (esp. the out_of_scope_* and retrieval_hit cases) — don't hand-tune it
+# without data.
 _RELEVANCE_THRESHOLD = 1.0
 
 _OUT_OF_SCOPE_ANSWER = (

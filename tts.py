@@ -7,8 +7,9 @@ Uses the existing OPENAI_API_KEY — no additional service required.
 import os
 import uuid
 from pathlib import Path
-from openai import OpenAI
+
 from dotenv import load_dotenv
+from openai import OpenAI
 
 from cache import TTLCache
 

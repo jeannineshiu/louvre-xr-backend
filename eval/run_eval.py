@@ -27,8 +27,8 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from rag_engine import RAGEngine, _RETRIEVAL_HISTORY_WINDOW
 from qa_pipeline import run as qa_run
+from rag_engine import _RETRIEVAL_HISTORY_WINDOW, RAGEngine
 
 GOLDEN_SET_PATH = Path(__file__).parent / "golden_set.jsonl"
 RESULTS_DIR = Path(__file__).parent / "results"

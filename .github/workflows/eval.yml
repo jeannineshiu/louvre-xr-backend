@@ -29,6 +29,19 @@ jobs:
       - name: Syntax check (no API calls, fails fast)
         run: python -m py_compile rag_engine.py qa_pipeline.py context_router.py server.py navigation_routes.py exhibit_recognizer.py tts.py eval/run_eval.py
 
+      - name: Lint (ruff, no API calls, fails fast)
+        run: |
+          pip install ruff
+          ruff check .
+
+      - name: Dependency vulnerability scan (no API calls, fails fast)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
+      - name: Unit tests (no API calls, fails fast)
+        run: python -m pytest tests/ -q
+
       - name: Check FAISS index is not stale (no API calls, fails fast)
         run: python rag_engine.py --check-fresh
         # Catches the case where exhibits_data.py (or build_index()'s chunking

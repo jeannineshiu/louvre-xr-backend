@@ -8,10 +8,11 @@ import base64
 import json
 import logging
 import os
+
 import cv2
 import numpy as np
-from openai import OpenAI
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
 
