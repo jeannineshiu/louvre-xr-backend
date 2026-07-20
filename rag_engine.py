@@ -132,11 +132,30 @@ _MODE_INSTRUCTIONS = {
 _DEFAULT_MODE = "BRIEF_TEXT"
 
 
-def _system_prompt(mode: str, context: str) -> str:
-    """Build the system prompt for a mode from the shared persona + instructions."""
+_HISTORY_AWARE_NOTE = (
+    "You have access to the conversation history — use it to give "
+    "contextually aware answers and avoid repeating information already given."
+)
+
+
+def _system_prompt(mode: str, context: str, history_aware: bool = False) -> str:
+    """Build the system prompt for a mode from the shared persona + instructions.
+
+    Static content (persona, mode instructions, history-aware note — all fixed
+    per mode, independent of the retrieved chunks) comes first; the
+    per-query retrieved context comes last. This keeps the prompt's leading
+    portion identical across every query in the same mode, which is what
+    lets provider-side prompt caching (OpenAI/Anthropic prefix caching) reuse
+    it instead of recomputing from scratch on every request — a dynamic
+    block anywhere before the tail would invalidate the cached prefix.
+    """
     persona = _MODE_PERSONA.get(mode, _PERSONA_GUIDE)
     instructions = _MODE_INSTRUCTIONS.get(mode, _MODE_INSTRUCTIONS[_DEFAULT_MODE])
-    return f"{persona}\n\nExhibit information:\n{context}\n\n{instructions}"
+    static_parts = [persona, instructions]
+    if history_aware:
+        static_parts.append(_HISTORY_AWARE_NOTE)
+    static = "\n\n".join(static_parts)
+    return f"{static}\n\nExhibit information:\n{context}"
 
 
 # FAISS L2 distance below which a retrieved chunk counts as "actually relevant".
@@ -396,10 +415,7 @@ class RAGEngine:
             return {"answer": _OUT_OF_SCOPE_ANSWER, "sources": []}
 
         context = "\n\n---\n\n".join(doc.page_content for doc in docs)
-        system_content = _system_prompt(mode, context) + (
-            "\n\nYou have access to the conversation history — use it to give "
-            "contextually aware answers and avoid repeating information already given."
-        )
+        system_content = _system_prompt(mode, context, history_aware=True)
 
         messages = [SystemMessage(content=system_content)]
         for msg in history:
