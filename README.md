@@ -153,6 +153,18 @@ uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 
 The FAISS index is pre-built and committed — no rebuild needed for local development.
 
+`requirements.txt` is a fully pinned, hash-verified lockfile generated from `requirements.in` with
+[pip-tools](https://github.com/jazzband/pip-tools). To add/upgrade a dependency, edit `requirements.in`
+and regenerate:
+
+```bash
+pip install pip-tools
+pip-compile --generate-hashes --output-file=requirements.txt requirements.in
+```
+
+CI and the Docker build both install with `pip install --require-hashes -r requirements.txt`, so a
+regenerated lockfile is required whenever `requirements.in` changes.
+
 | Resource | URL |
 |---|---|
 | Server | `http://localhost:8000` |
