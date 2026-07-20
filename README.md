@@ -517,8 +517,22 @@ Deployed on Railway via the included `Dockerfile`; redeploys automatically on ev
 | Environment variable | Value |
 |---|---|
 | `OPENAI_API_KEY` | Your OpenAI API key (`sk-...`) |
+| `SENTRY_DSN` | Optional — enables error tracking (see below). Unset = disabled. |
+| `SENTRY_ENVIRONMENT` | Optional, default `production` |
+| `SENTRY_TRACES_SAMPLE_RATE` | Optional, default `0.1` |
 
 Since this backend is publicly reachable, set a hard spending limit on `OPENAI_API_KEY` in the OpenAI dashboard before sharing the URL — the per-IP rate limits in this repo (see [API Usage Limits](#api-usage-limits)) reduce but don't eliminate cost exposure from public traffic.
+
+### Error tracking (Sentry)
+
+Set `SENTRY_DSN` (from sentry.io → Project Settings → Client Keys) to enable [Sentry](https://sentry.io) error
+tracking — unhandled exceptions in any request (e.g. `/ask`'s pipeline failures) are reported automatically via
+the FastAPI integration, and everywhere this codebase already calls `logger.exception(...)` (RAG/vision/TTS
+failure paths) is picked up too, since Sentry's logging integration captures any `ERROR`-level log call. No code
+changes needed to add a new reported error path — just use `logger.exception(...)` as the rest of the codebase
+does. `send_default_pii=False` is set explicitly: Sentry gets the exception and traceback, never visitor
+question/answer text (see the note in `server.py`'s `/ask` handler on why that's never logged either). Leave
+`SENTRY_DSN` unset for local development — Sentry is a complete no-op without it.
 
 Rebuild the FAISS index only after editing `exhibits_data.py`:
 

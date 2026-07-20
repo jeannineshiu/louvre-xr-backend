@@ -166,6 +166,7 @@ certifi==2026.6.17 \
     #   httpcore
     #   httpx
     #   requests
+    #   sentry-sdk
 charset-normalizer==3.4.9 \
     --hash=sha256:0327fcd59a935777d83410750c50600ee9571af2846f71ce40f25b13da1ef380 \
     --hash=sha256:03d07803992c6c7bbc976327f34b18b6160327fc81cb82c9d504720ac0be3b62 \
@@ -305,7 +306,9 @@ faiss-cpu==1.13.2 \
 fastapi==0.135.3 \
     --hash=sha256:9b0f590c813acd13d0ab43dd8494138eb58e484bfac405db1f3187cfc5810d98 \
     --hash=sha256:bd6d7caf1a2bdd8d676843cdcd2287729572a1ef524fc4d65c17ae002a1be654
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   sentry-sdk
 frozenlist==1.8.0 \
     --hash=sha256:0325024fe97f94c41c08872db482cf8ac4800d80e79222c6b0b7b162d5b13686 \
     --hash=sha256:032efa2674356903cd0261c4317a561a6850f3ac864a63fc1583147fb05a79b0 \
@@ -1606,6 +1609,10 @@ requests-toolbelt==1.0.0 \
     --hash=sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6 \
     --hash=sha256:cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06
     # via langsmith
+sentry-sdk[fastapi]==2.66.0 \
+    --hash=sha256:096136c214c602be2b323524d30755dc5b30ec5a218a206207f33b12c05c6f11 \
+    --hash=sha256:9727d35aa83c56cd53294676fe65b96296a334c9ce107fa2142bd70f47acb265
+    # via -r requirements.in
 slowapi==0.1.10 \
     --hash=sha256:3acb61561dc9d687e3d3669362ff6a439de9ba44e2fed3a9c165da26b4b83e28 \
     --hash=sha256:d320d5bc04d9f171a77fb16700faf3036d85b00f420f22924c8a225f95bd14f9
@@ -1836,7 +1843,9 @@ typing-inspection==0.4.2 \
 urllib3==2.7.0 \
     --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
     --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
-    # via requests
+    # via
+    #   requests
+    #   sentry-sdk
 uuid-utils==0.17.0 \
     --hash=sha256:03815cea572c8a693cab5475b9d750cc161470961c7defa27e9286cad62f38f5 \
     --hash=sha256:04452640d8b6920c480c16e5afe91ff896d236e0c972830f9247e0898d38c803 \
