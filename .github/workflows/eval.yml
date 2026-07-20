@@ -4,6 +4,15 @@ name: RAG Eval
 # retrieval change that regresses answer quality is caught before merge,
 # not after Railway auto-deploys it to production.
 #
+# Split into two jobs because GitHub does NOT expose repository secrets to
+# `pull_request`-triggered workflow runs opened by Dependabot (security
+# measure — a compromised dependency bump shouldn't be able to exfiltrate
+# secrets via CI). `eval` (this file's required branch-protection check)
+# covers everything that needs zero API calls, so Dependabot PRs can pass
+# it; `rag-eval` covers the OpenAI-calling harness and is informational
+# only — it can't be required without permanently red-X'ing every
+# Dependabot PR.
+#
 # Deterministic checks only (--no-judge): retrieval hit, length budget,
 # markdown-free output, shop URL presence, required/forbidden substrings.
 # No LLM-judge here to keep every PR push cheap — the judge run lives in
@@ -15,6 +24,7 @@ on:
 
 jobs:
   eval:
+    name: eval
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +60,23 @@ jobs:
         # silently pass against a stale index while production would too,
         # since server.py's get_or_build_index() just loads whatever's
         # committed. Pure hash comparison, no OpenAI calls.
+
+  rag-eval:
+    name: rag-eval (informational — needs OPENAI_API_KEY, not available on Dependabot PRs)
+    runs-on: ubuntu-latest
+    # Skip outright on Dependabot PRs instead of failing on a missing key —
+    # the job would just error out anyway, this makes the reason visible
+    # without a confusing red X.
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements.txt
 
       - name: Run eval harness (deterministic checks only)
         env:
