@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
+import sentry_sdk
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -36,8 +37,23 @@ from rag_engine import RAGEngine
 from splat_registry import list_mapping, resolve_splat
 from tts import generate_sophie_audio
 
+# Error tracking — no-ops entirely if SENTRY_DSN isn't set, so local dev and
+# any deploy that hasn't configured Sentry yet behave exactly as before.
+# send_default_pii=False matches this app's existing choice (see /ask below)
+# not to send visitor question/answer text anywhere — Sentry gets the
+# exception + traceback, not the conversation content.
+_SENTRY_DSN = os.environ.get("SENTRY_DSN")
+if _SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
+        traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        send_default_pii=False,
+    )
+
 configure_logging()
 logger = logging.getLogger(__name__)
+logger.info("sentry_enabled" if _SENTRY_DSN else "sentry_disabled_no_dsn")
 
 # Every visitor joining a room in front of the same exhibit gets an
 # equivalent greeting — cache the generated text per exhibit instead of

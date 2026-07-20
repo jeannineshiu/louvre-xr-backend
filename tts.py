@@ -4,6 +4,7 @@ Generates Sophie's voice using OpenAI's speech API and saves as a temporary mp3 
 Uses the existing OPENAI_API_KEY — no additional service required.
 """
 
+import logging
 import os
 import uuid
 from pathlib import Path
@@ -14,6 +15,8 @@ from openai import OpenAI
 from cache import TTLCache
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # Sophie's voice — options: alloy, echo, fable, onyx, nova, shimmer
 SOPHIE_VOICE = os.environ.get("SOPHIE_VOICE", "nova")
@@ -72,4 +75,8 @@ def _synthesize(text: str) -> str | None:
         return file_id
 
     except Exception:
+        # Degrades to "no audio" for the caller (see generate_sophie_audio) —
+        # logged (and, if SENTRY_DSN is set in server.py, reported) so a
+        # persistent TTS outage is visible instead of silently invisible.
+        logger.exception("tts_synthesis_failed")
         return None
