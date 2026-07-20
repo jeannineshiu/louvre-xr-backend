@@ -22,7 +22,7 @@ faiss-cpu==1.13.2
 opencv-python==4.13.0.92
 
 # Utilities
-numpy==2.2.6
+numpy==2.5.1
 requests==2.33.1
 python-dotenv==1.2.2
 
