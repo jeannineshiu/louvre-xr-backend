@@ -87,9 +87,10 @@ louvre-ar-backend/
 ├── splat_mapping.json      # Editable splat → exhibit alias table used by splat_registry.py
 ├── tts.py                  # Sophie's voice — OpenAI TTS, saves mp3s to temp_audio/
 │
-├── faiss_index/            # Pre-built FAISS vector index (committed — no rebuild needed)
+├── faiss_index/            # Pre-built FAISS vector index (committed — rebuild after editing exhibits_data.py)
 │   ├── index.faiss
-│   └── index.pkl
+│   ├── index.pkl
+│   └── source_hash.txt     # Hash of exhibits_data.py + chunking schema; CI fails the PR if this is stale
 ├── temp_audio/             # Generated Sophie TTS mp3s, served at GET /audio/{file_id}
 │
 ├── demo.html               # Browser demo — voice chat UI served at GET /demo
@@ -515,6 +516,8 @@ git add faiss_index/
 git commit -m "Rebuild FAISS index"
 git push origin main
 ```
+
+The `eval` CI workflow runs `python rag_engine.py --check-fresh` on every PR into `main` and fails fast (no OpenAI calls) if `exhibits_data.py` or the chunking logic in `rag_engine.py` changed without a corresponding index rebuild+commit.
 
 ---
 

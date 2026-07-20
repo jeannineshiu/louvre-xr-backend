@@ -9,7 +9,9 @@ Usage:
     uvicorn server:app --reload
 """
 
+import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
@@ -33,7 +35,17 @@ from navigation_routes import ROUTES, EXHIBIT_NAMES
 from exhibits_data import EXHIBITS
 from splat_registry import resolve_splat, list_mapping
 from tts import generate_sophie_audio
+from logging_config import configure_logging
+from cache import TTLCache
 import qa_pipeline
+
+configure_logging()
+logger = logging.getLogger(__name__)
+
+# Every visitor joining a room in front of the same exhibit gets an
+# equivalent greeting — cache the generated text per exhibit instead of
+# paying for a fresh gpt-4o call on every /session/start.
+_greeting_cache = TTLCache(ttl_seconds=3600, maxsize=64)
 
 # Map exhibit id → display name so the frontend can send either form in `exhibit`
 _EXHIBIT_ID_TO_NAME = {e["id"]: e["name"] for e in EXHIBITS}
@@ -134,8 +146,12 @@ class TranscribeResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _rag
+    logger.info("startup_begin")
+    start = time.monotonic()
     _rag = RAGEngine()
+    logger.info("startup_complete", extra={"duration_ms": round((time.monotonic() - start) * 1000)})
     yield
+    logger.info("shutdown")
 
 
 app = FastAPI(title="ContextAR", version="0.2.0", lifespan=lifespan)
@@ -198,6 +214,17 @@ def ask(req: AskRequest, request: Request):
             detail=f"Invalid mode '{req.mode}'. Choose from: {sorted(VALID_MODES)}",
         )
 
+    start = time.monotonic()
+    # Question/answer text is intentionally not logged — visitor content, no
+    # operational value beyond length/shape, which we log instead.
+    logger.info("ask_received", extra={
+        "requested_mode": req.mode,
+        "has_image":      bool(req.image_base64),
+        "has_state":      bool(req.state),
+        "has_history":    bool(req.history),
+        "question_len":   len(req.question),
+    })
+
     # Multiplayer room context — prepend so Sophie can address the group and the asker
     question = req.question
     if req.participants and req.asker_name:
@@ -210,16 +237,20 @@ def ask(req: AskRequest, request: Request):
             f"Question: {req.question}"
         )
 
-    result = qa_pipeline.run(
-        question=question,
-        image_b64=req.image_base64,
-        api_state=req.state.model_dump() if req.state else None,
-        mode=req.mode,
-        rag=_rag,
-        history=[m.model_dump() for m in req.history] if req.history else None,
-        # Prefer an explicit exhibit id/name; otherwise identify the exhibit from the splat.
-        known_exhibit=_resolve_exhibit(req.exhibit) or resolve_splat(req.splat),
-    )
+    try:
+        result = qa_pipeline.run(
+            question=question,
+            image_b64=req.image_base64,
+            api_state=req.state.model_dump() if req.state else None,
+            mode=req.mode,
+            rag=_rag,
+            history=[m.model_dump() for m in req.history] if req.history else None,
+            # Prefer an explicit exhibit id/name; otherwise identify the exhibit from the splat.
+            known_exhibit=_resolve_exhibit(req.exhibit) or resolve_splat(req.splat),
+        )
+    except Exception:
+        logger.exception("ask_pipeline_failed")
+        raise
 
     # Optional ElevenLabs TTS — only when voice=True and there is an answer
     audio_url: str | None = None
@@ -228,6 +259,14 @@ def ask(req: AskRequest, request: Request):
         if file_id:
             base = str(request.base_url).rstrip("/")
             audio_url = f"{base}/audio/{file_id}"
+
+    logger.info("ask_completed", extra={
+        "mode":          result["mode"],
+        "exhibit":       result["exhibit"],
+        "answer_len":    len(result["answer"]),
+        "voice":         req.voice,
+        "duration_ms":   round((time.monotonic() - start) * 1000),
+    })
 
     return AskResponse(
         mode=result["mode"],
@@ -259,6 +298,7 @@ async def transcribe(request: Request, file: UploadFile = File(...)):
         )
         return TranscribeResponse(text=(result.text or "").strip())
     except Exception:  # noqa: BLE001 — degrade to empty text instead of 500
+        logger.exception("transcribe_failed")
         return TranscribeResponse(text="")
 
 
@@ -294,20 +334,13 @@ def demo():
     return FileResponse("demo.html", media_type="text/html")
 
 
-@app.post("/session/start", response_model=SessionStartResponse)
-@limiter.limit("30/hour")
-def session_start(req: SessionStartRequest, request: Request):
-    """
-    Generate Sophie's welcome greeting when a visitor joins a multiplayer room.
-    Optionally include the exhibit name if already identified.
-    Pass voice=true to receive a TTS audio URL for broadcast to all room members.
-    """
+def _generate_greeting(exhibit: str | None) -> str:
     llm = ChatOpenAI(model="gpt-4o", temperature=0.4)
 
-    if req.exhibit:
+    if exhibit:
         prompt = (
             f"A group of visitors has just joined a shared WebXR tour room. "
-            f"They are standing in front of '{req.exhibit}'. "
+            f"They are standing in front of '{exhibit}'. "
             f"Greet them warmly as Sophie, their MuseXR guide, in ONE short sentence "
             f"(maximum 20 words). Mention the sculpture by name and invite them to ask you anything."
         )
@@ -324,8 +357,19 @@ def session_start(req: SessionStartRequest, request: Request):
         "Speak in a friendly, personal tone. Plain text only — no markdown."
     )
 
-    response  = llm.invoke([SystemMessage(content=system), HumanMessage(content=prompt)])
-    greeting  = response.content.strip()
+    response = llm.invoke([SystemMessage(content=system), HumanMessage(content=prompt)])
+    return response.content.strip()
+
+
+@app.post("/session/start", response_model=SessionStartResponse)
+@limiter.limit("30/hour")
+def session_start(req: SessionStartRequest, request: Request):
+    """
+    Generate Sophie's welcome greeting when a visitor joins a multiplayer room.
+    Optionally include the exhibit name if already identified.
+    Pass voice=true to receive a TTS audio URL for broadcast to all room members.
+    """
+    greeting = _greeting_cache.get_or_set(req.exhibit or "", lambda: _generate_greeting(req.exhibit))
 
     audio_url: str | None = None
     if req.voice and greeting:
