@@ -1,8 +1,8 @@
 # MuseXR Backend
 
-FastAPI backend for **MuseXR**, an AI museum-guide platform for the Louvre. It handles exhibit recognition, RAG-based Q&A, and voice, shared across three independent frontends — a browser demo, a Meta AI Glasses app, and a multiplayer WebXR tour (where the guide is named **Sophie**).
+FastAPI backend for **MuseXR**, an AI museum-guide platform for the Louvre. It gives visitors a personal guide — **Sophie** — who recognizes the artwork in front of them from a camera frame or a known exhibit/splat id, and answers questions about it in natural language and voice, grounded in a curated knowledge base rather than open-ended generation. One backend serves three independent, already-shipped frontends: a browser demo, a Meta AI Glasses app, and a multiplayer WebXR tour — so recognition, Q&A, navigation, and voice are built once and stay consistent everywhere visitors encounter the guide.
 
-**Status:** Production — feature-complete and integrated across all three client frontends. Deployed on Railway with automatic redeploy on push to `main`; the RAG chatbot's answer quality is checked by an eval harness (`eval/`) gated in CI on every PR (see `.github/workflows/eval.yml`).
+**Status: Production-ready.** Feature-complete and live across all three client frontends, deployed on Railway with automatic redeploy on push to `main`. This isn't just "it works" — every change to `main` passes through an automated eval harness, a 40-case unit test suite, dependency vulnerability scanning, and a stale-index check before it can merge; production itself is covered by error tracking and rate limiting that holds up across multiple replicas. See [Production Readiness](#production-readiness) for the full picture.
 
 Core exhibition: **Louvre Museum, Paris** — eight sculptures spanning antiquity to the 19th century, plus four supplementary works (Jardin des Tuileries and a Sydney field-demo piece) that support the full feature set outside the main museum building.
 
@@ -13,6 +13,7 @@ Core exhibition: **Louvre Museum, Paris** — eight sculptures spanning antiquit
 ## Contents
 
 - [Overview](#overview)
+- [Production Readiness](#production-readiness)
 - [Frontends](#frontends)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
@@ -38,6 +39,18 @@ This is a **pure QA + routing service** — no sensors, no camera, no background
 3. **Answer** the question via a RAG pipeline (FAISS vector search + GPT-4o), grounded in the exhibit's knowledge base, prompted for the chosen length, and aware of the full conversation history for follow-ups
 
 Any environment sensing (camera capture, gaze tracking, crowd/noise estimation) happens entirely on the client; this server only consumes the values passed in the request body.
+
+## Production Readiness
+
+This service went through a deliberate hardening pass beyond initial feature delivery — the same rigor expected of any customer-facing backend, applied to the specific failure modes of an LLM/RAG system. The engineering checklist and lessons behind it are written up in [`docs/RAG_SKILLS.md`](docs/RAG_SKILLS.md); the summary:
+
+- **Quality gate on every PR, not just code review.** A golden-set eval harness (`eval/`, 22 cases) runs deterministic checks — retrieval hit, length budget, required/forbidden content — as a required CI check on every PR into `main`; a separate scheduled job runs an LLM-judge pass for deeper groundedness scoring. A prompt or retrieval change that degrades answer quality is caught before merge, not discovered by a visitor.
+- **40 unit tests, evaluated before a single API dollar is spent.** Router, splat registry, cache, navigation lookup, exact-match retrieval, and chit-chat routing are all covered by pytest, run first in CI so a broken build fails fast and free.
+- **Hardened dependency supply chain.** `requirements.txt` is a fully hash-pinned lockfile (`pip-tools --generate-hashes`), installed with `--require-hashes` in both CI and the Docker build; `pip-audit` and Dependabot scan for known CVEs on every PR.
+- **Deterministic guardrails instead of LLM guesswork.** Navigation, exact-name lookups, and chit-chat are resolved by plain code paths — not left for the LLM to infer — which is cheaper, faster, and immune to hallucination on exactly the questions (room numbers, proper nouns) where a wrong guess is most visible to a visitor.
+- **Stale-index protection.** CI fails the PR if the committed FAISS index doesn't match the current knowledge base and chunking schema (`rag_engine.py --check-fresh`), closing off a class of bugs where local testing passes against one index while production silently serves another.
+- **Production observability.** Sentry (opt-in via `SENTRY_DSN`) captures every unhandled exception and `logger.exception` call automatically, with `send_default_pii=False` enforced — errors are tracked without ever logging visitor questions, answers, or other PII.
+- **Rate limiting that survives horizontal scaling.** The per-IP limiter is Redis-backed when `REDIS_URL` is set, so limits hold across replicas instead of resetting per-process; it degrades gracefully to in-memory limiting if Redis is unavailable, rather than failing requests.
 
 ## Frontends
 
