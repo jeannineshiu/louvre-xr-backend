@@ -114,33 +114,43 @@ FAR_OFF_TOPIC_QUERIES = [
     "Quelle heure ferme le musée ?",
 ]
 
-# Cross-lingual on-topic probes. The persona explicitly answers in the
-# visitor's language (French and Chinese are called out in _PERSONA_GUIDE),
-# but the chunks are English and text-embedding-3-small's cross-lingual
-# alignment is weaker than its monolingual one — so these queries sit
-# systematically further from the index than their English twins, and a
-# threshold calibrated on English-only probes silently mis-declines them.
-# Each entry mirrors an English golden-set question so the two distances are
-# directly comparable.
-MULTILINGUAL_ON_TOPIC_QUERIES = [
-    ("zh_venus_creator",        "維納斯女神像是誰創作的？是什麼時候的作品？"),
+# Extra cross-lingual on-topic probes, on top of the golden-set cases already
+# tagged with a non-"en" "lang" field (those are loaded automatically by
+# _load_on_topic_queries and land in the same group — don't duplicate them
+# here). The persona explicitly answers in the visitor's language (French and
+# Chinese are called out in _PERSONA_GUIDE), but the chunks are English and
+# text-embedding-3-small's cross-lingual alignment is weaker than its
+# monolingual one — so these queries sit systematically further from the index
+# than their English twins, and a threshold calibrated on English-only probes
+# silently mis-declines them. Each entry mirrors an English golden-set
+# question so the two distances are directly comparable.
+EXTRA_MULTILINGUAL_QUERIES = [
     ("zh_winged_victory_basic", "薩莫色雷斯的勝利女神有多古老？是什麼時候被發現的？"),
     ("zh_bastet_symbolism",     "這座貓女神雕像代表什麼意義？"),
     ("zh_dying_slave_tomb",     "垂死的奴隸這座雕像最初是為了什麼而做的？"),
     ("fr_venus_creator",        "Qui a créé la Vénus de Milo et quand ?"),
     ("fr_winged_victory_full",  "Raconte-moi l'histoire de la Victoire de Samothrace."),
-    ("fr_bastet_symbolism",     "Que représentait la déesse Bastet ?"),
 ]
 
 
-def _load_on_topic_queries() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """(single_turn, multi_turn) lists of (id, retrieval_query) pairs from the
-    golden set, mirroring exactly what RAGEngine._retrieve() would actually be
-    called with in production:
-      - skips expect_decline cases (those are supposed to score like off-topic)
+def _load_on_topic_queries() -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
+    """(single_turn, multi_turn, multilingual) lists of (id, retrieval_query)
+    pairs from the golden set, mirroring exactly what RAGEngine._retrieve()
+    would actually be called with in production:
+      - skips expect_decline AND expect_grounded_refusal cases. Both are
+        deliberately out of scope, so counting them as on-topic would corrupt
+        the very distribution this script measures. They differ only in which
+        layer is expected to refuse: expect_decline means the coarse distance
+        gate should fire (sources == []), expect_grounded_refusal means the
+        query scores close enough that retrieval returns something and the
+        prompt's grounding rule has to do the refusing. The latter are
+        probed as off-topic via NEAR_MISS_QUERIES above.
       - skips NAVIGATION-mode cases (they bypass RAG/_retrieve() entirely —
         see qa_pipeline._navigation_answer — so their embedding distance is
         meaningless here)
+      - routes cases tagged with a non-"en" "lang" into the multilingual
+        group (joined by EXTRA_MULTILINGUAL_QUERIES), since cross-lingual
+        queries embed systematically further from the English chunks
       - for history cases, folds in the last _RETRIEVAL_HISTORY_WINDOW turns
         the same way _query_with_history does, since a bare pronoun-only
         follow-up embeds nowhere near the exhibit on its own by design
@@ -153,22 +163,27 @@ def _load_on_topic_queries() -> tuple[list[tuple[str, str]], list[tuple[str, str
     against off-topic queries than it is for either group on its own.
     """
     single_turn, multi_turn = [], []
+    multilingual = list(EXTRA_MULTILINGUAL_QUERIES)
     with open(GOLDEN_SET_PATH) as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             case = json.loads(line)
-            if case.get("expect_decline") or case.get("mode") == "NAVIGATION":
+            if (case.get("expect_decline")
+                    or case.get("expect_grounded_refusal")
+                    or case.get("mode") == "NAVIGATION"):
                 continue
             history = case.get("history")
             if history:
                 recent = history[-_RETRIEVAL_HISTORY_WINDOW:]
                 retrieval_query = " ".join(m["content"] for m in recent) + " " + case["question"]
                 multi_turn.append((case["id"], retrieval_query))
+            elif case.get("lang", "en") != "en":
+                multilingual.append((case["id"], case["question"]))
             else:
                 single_turn.append((case["id"], case["question"]))
-    return single_turn, multi_turn
+    return single_turn, multi_turn, multilingual
 
 
 def _best_distance(vectorstore, query: str) -> float:
@@ -215,11 +230,10 @@ def main():
 
     vectorstore = get_or_build_index()
 
-    single_turn, multi_turn = _load_on_topic_queries()
+    single_turn, multi_turn, multilingual = _load_on_topic_queries()
     single_scores = _probe_group(vectorstore, "On-topic / single-turn", single_turn)
     multi_scores = _probe_group(vectorstore, "On-topic / multi-turn (history folded in)", multi_turn)
-    multilingual_scores = _probe_group(vectorstore, "On-topic / multilingual (zh/fr)",
-                                       MULTILINGUAL_ON_TOPIC_QUERIES)
+    multilingual_scores = _probe_group(vectorstore, "On-topic / multilingual (zh/fr)", multilingual)
     near_scores = _probe_group(vectorstore, "Off-topic / near-miss",
                                [(q, q) for q in NEAR_MISS_QUERIES])
     far_scores = _probe_group(vectorstore, "Off-topic / far",
@@ -237,8 +251,8 @@ def main():
 
     on_max, on_max_label = max(on_scores)
     # tag by group membership, not by comparing distances — two groups can tie
-    off_tagged = ([(d, l, "near-miss") for d, l in near_scores]
-                  + [(d, l, "far") for d, l in far_scores])
+    off_tagged = ([(dist, label, "near-miss") for dist, label in near_scores]
+                  + [(dist, label, "far") for dist, label in far_scores])
     off_min, off_min_label, binding_group = min(off_tagged)
 
     print(
@@ -260,7 +274,7 @@ def main():
             f"near-miss query has to travel further before it gets answered."
         )
     else:
-        overlap = [(d, l) for d, l in on_scores if d >= off_min]
+        overlap = [(dist, label) for dist, label in on_scores if dist >= off_min]
         print(
             f"\nNo clean separation — the on-topic and off-topic ranges overlap by "
             f"{on_max - off_min:.3f}. _RELEVANCE_THRESHOLD cannot perfectly separate "
