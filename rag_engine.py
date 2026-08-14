@@ -62,8 +62,17 @@ _PERSONA_GUIDE = (
     "You guide visitors through the Louvre Museum, Jardin des Tuileries, Paris, "
     "and one additional public sculpture in Sydney, Australia. "
     "The exhibition features iconic sculptures from antiquity to the 20th century. "
-    "Use only the exhibit information below. "
     "Speak in a friendly, personal tone — as if you are standing right there with the visitor.\n\n"
+    "Grounding: answer ONLY from the exhibit information below. If it does not "
+    "contain the answer — the visitor asks about an artwork that is not one of "
+    "these exhibits, about an artist's life or other works beyond what is written "
+    "here, or about anything else the text doesn't cover — say plainly, in the "
+    "visitor's language, that you don't have information about that, and offer to "
+    "tell them about one of the exhibits you do know instead. NEVER fill the gap "
+    "from general knowledge, even for famous artworks or artists you are certain "
+    "about: retrieval sometimes hands you a nearby-but-wrong exhibit's text, and "
+    "answering from memory instead of declining is the failure mode this rule "
+    "exists to prevent.\n\n"
     "Language: detect the language of the visitor's question and respond in that same language. "
     "If the question is in French, respond in French. If in Chinese, respond in Chinese. "
     "Always match the visitor's language.\n\n"
@@ -159,26 +168,39 @@ def _system_prompt(mode: str, context: str, history_aware: bool = False) -> str:
     return f"{static}\n\nExhibit information:\n{context}"
 
 
-# FAISS L2 distance below which a retrieved chunk counts as "actually relevant".
-# Also used as the out-of-scope gate: if no exhibit clears this bar, the question
-# isn't about any of our 12 exhibits and we should decline rather than let the
-# LLM answer from general world knowledge (see eval/golden_set.jsonl
-# "out_of_scope_capital" / "out_of_scope_unknown_exhibit" — both hallucinated
-# grounded-sounding answers before this gate was added).
+# FAISS distance below which a retrieved chunk counts as "possibly relevant".
+# (Note: LangChain's FAISS wrapper uses IndexFlatL2, so these scores are
+# SQUARED L2. Embeddings are unit-norm, so d = 2 - 2*cos — the distance axis
+# is just an affine rescaling of cosine similarity; 1.0 here means cos 0.5.)
 #
-# RE-CALIBRATED for section-chunk granularity (2026-07-20, via
-# `python -m eval.calibrate_threshold` against the live per-section index):
-#   on-topic best-chunk distances:  0.349–0.925 (18 golden-set cases,
-#     NAVIGATION-mode and expect_decline cases excluded — they don't go
-#     through this gate; history cases probed with history folded in, same
-#     as _query_with_history)
-#   off-topic best-chunk distances: 1.018 (Sistine Chapel) – 1.767 (unrelated)
-# Clean separation with a gap of (0.925, 1.018) — 1.0 sits inside it and
-# correctly classified all 18 on-topic / 8 off-topic probes (0 false
-# declines, 0 false answers). Re-run `python -m eval.calibrate_threshold`
-# after any change to build_index()'s chunking or to exhibits_data.py that
-# meaningfully changes section content — don't hand-tune this without data.
-_RELEVANCE_THRESHOLD = 1.0
+# This gate is a coarse cost filter, NOT the correctness gate. It exists to
+# skip the GPT-4o call (and return _OUT_OF_SCOPE_ANSWER) for questions so far
+# from the index that generating is pointless — "what's the weather", ticket
+# refunds. It CANNOT be the correctness gate, for two measured reasons
+# (2026-08-14, `python -m eval.calibrate_threshold --candidate 1.0`):
+#
+#   1. Near-miss off-topic questions (other Louvre works, our artists' other
+#      works, name collisions like "Venus of Willendorf") score 0.66-1.48 —
+#      squarely inside and above the on-topic range (0.35-0.93 English).
+#      No threshold separates them, and _exact_match_ids() bypasses the
+#      gate entirely for artist-name questions ("Who was Antonio Canova?").
+#   2. Cross-lingual on-topic questions score far higher than their English
+#      twins: the four Chinese golden probes landed 1.055-1.230, so the old
+#      1.0 cutoff (calibrated on English-only probes) wrongly declined every
+#      Chinese question despite the persona promising Chinese answers.
+#
+# Correctness therefore lives in the prompt's Grounding instruction
+# (_PERSONA_GUIDE): the LLM sees the retrieved text and declines when it
+# doesn't answer the question. This threshold is set loose — above the worst
+# observed on-topic probe (zh 1.230) and at the floor of the far-off-topic
+# band (1.288-1.767) — so its failure mode is "one wasted LLM call that
+# politely declines", never "a real question hard-declined".
+#
+# Re-run `python -m eval.calibrate_threshold` after any change to
+# build_index()'s chunking or to exhibits_data.py that meaningfully changes
+# section content — don't hand-tune this without data. When adding a
+# supported language to the persona, add probes in that language first.
+_RELEVANCE_THRESHOLD = 1.35
 
 _OUT_OF_SCOPE_ANSWER = (
     "I'm not able to help with that — I only know about the sculptures in this "
