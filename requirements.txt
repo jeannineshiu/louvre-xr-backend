@@ -961,9 +961,9 @@ numpy==2.2.6 \
     #   faiss-cpu
     #   langchain-community
     #   opencv-python
-openai==2.31.0 \
-    --hash=sha256:43ca59a88fc973ad1848d86b98d7fac207e265ebbd1828b5e4bdfc85f79427a5 \
-    --hash=sha256:44e1344d87e56a493d649b17e2fac519d1368cbb0745f59f1957c4c26de50a0a
+openai==2.53.0 \
+    --hash=sha256:baf5802ad08980e1d9d561e1b996e800c8bcd14af5847c6d0e7a5cc59e4d4116 \
+    --hash=sha256:c694ffc747a3c4d1663ef2b07b811315a476164ee5efa3a993967349ebca7618
     # via
     #   -r requirements.in
     #   langchain-openai
