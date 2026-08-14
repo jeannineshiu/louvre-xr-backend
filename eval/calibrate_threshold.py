@@ -1,20 +1,30 @@
 """
 ContextAR - Relevance-threshold calibration probe.
 
-rag_engine._RELEVANCE_THRESHOLD gates whether a question is "about one of our
-exhibits" at all (see the comment above it). It was calibrated against the
-OLD one-Document-per-exhibit index and has not been re-validated since
-build_index() switched to per-section chunking (INDEX_SCHEMA_VERSION 2) —
-the embedding distance distribution shifts with chunk granularity, so the
-old 1.0 cutoff is unverified for the current index.
+rag_engine._RELEVANCE_THRESHOLD is the coarse cost filter in front of the
+GPT-4o call: questions whose best chunk is further than this get
+_OUT_OF_SCOPE_ANSWER without generating (see the comment above it). It is
+deliberately NOT the correctness gate — near-miss questions score inside the
+on-topic range and cross-lingual on-topic questions score well above their
+English twins, so no single distance separates in-scope from out-of-scope.
+Refusing when retrieval returns something that doesn't answer the question is
+the prompt's job (_PERSONA_GUIDE's grounding rule), checked end-to-end by the
+expect_grounded_refusal cases in eval/run_eval.py.
 
 This script does NOT change the threshold. It probes the live FAISS index
 with on-topic queries (from eval/golden_set.jsonl, reproducing exactly what
 RAGEngine._retrieve() is actually called with in production — see
 _load_on_topic_queries) and off-topic/adversarial queries, prints the
-best-chunk L2 distance for each, and reports the gap between the on-topic
-and off-topic distributions so a human can pick a defensible cutoff from
-real numbers instead of hand-tuning it.
+best-chunk distance for each, and reports where the group distributions sit,
+so a human can pick a defensible cutoff from real numbers instead of
+hand-tuning it. Re-run it after any change to build_index()'s chunking or to
+exhibits_data.py's section content: the distance distribution shifts with
+chunk granularity, and the current value is only as good as its last probe.
+
+Distances are SQUARED L2 (LangChain's FAISS wrapper uses IndexFlatL2) over
+unit-norm embeddings, so d = 2 - 2*cos: the axis is an affine rescaling of
+cosine similarity, and a gap of 0.10 in d is only 0.05 in cosine. Judge
+margins on that scale, not on how large the number looks.
 
 Queries are probed in four groups, because lumping them together hides
 what actually sets the cutoff:
