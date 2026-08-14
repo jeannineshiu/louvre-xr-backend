@@ -33,7 +33,7 @@ opencv-python==4.13.0.92
 
 # Utilities
 numpy==2.2.6
-requests==2.33.1
+requests==2.34.2
 python-dotenv==1.2.2
 
 # Testing
