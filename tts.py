@@ -62,12 +62,26 @@ def generate_sophie_audio(text: str) -> str | None:
     return file_id
 
 
+# tts-1/tts-1-hd are English-trained legacy models: they read non-English
+# text through the same English acoustic model instead of switching
+# pronunciation, so French/Chinese input comes out in an English accent.
+# gpt-4o-mini-tts is natively multilingual and reads text in its own
+# language's phonetics, plus takes `instructions` to steer delivery.
+_TTS_MODEL = "gpt-4o-mini-tts"
+_TTS_INSTRUCTIONS = (
+    "Speak naturally with native, fluent pronunciation in whatever language "
+    "the input text is written in — do not carry over an English accent "
+    "when the text is French, Chinese, or any other language."
+)
+
+
 def _synthesize(text: str) -> str | None:
     try:
         response = _get_client().audio.speech.create(
-            model="tts-1",
+            model=_TTS_MODEL,
             voice=SOPHIE_VOICE,
             input=text,
+            instructions=_TTS_INSTRUCTIONS,
         )
         file_id   = str(uuid.uuid4())
         file_path = AUDIO_DIR / f"{file_id}.mp3"
