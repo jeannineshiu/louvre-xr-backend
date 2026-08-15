@@ -329,8 +329,10 @@ let imageB64       = null;
 let currentExhibit = '';
 let isListening    = false;
 let isSpeaking     = false;
-let detectedLang   = 'en-US';  // updated by STT; used for TTS language matching
-let recognition    = null;
+let detectedLang   = 'en-US';  // updated by STT; used for browser-TTS fallback only
+let mediaRecorder  = null;
+let recordedChunks = [];
+let micStream      = null;
 let busy           = false;
 let currentAudio   = null;  // server-generated mp3 currently playing, if any
 
@@ -408,94 +410,100 @@ function wrongExhibit() {
 }
 
 // ── Voice input ───────────────────────────────────────────────────────────────
+// Records via MediaRecorder and transcribes through the backend's /transcribe
+// endpoint (OpenAI Whisper) instead of the browser's built-in SpeechRecognition.
+// SpeechRecognition has no real language auto-detection — `lang = ''` just
+// falls back to the browser/OS default (effectively always English), so a
+// visitor speaking French got heard (and misheard) as English and the whole
+// pipeline correctly, but pointlessly, answered in English. Whisper actually
+// detects the spoken language from the audio itself.
 let listeningBubble = null;
 
 function toggleMic() {
   if (isSpeaking) { stopSpeaking(); return; }
   if (busy) return; // API call in progress — ignore tap
 
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
     alert('Voice input is not supported on this browser.\nPlease use Safari on iPhone or Chrome on Android.');
     return;
   }
-  if (isListening) { recognition?.stop(); return; }
+  if (isListening) { mediaRecorder?.stop(); return; }
 
-  recognition = new SR();
-  recognition.lang = '';  // auto-detect visitor's language
-  recognition.continuous = false;
-  recognition.interimResults = true; // needed on iOS Safari to get any results
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(startRecording)
+    .catch(() => {
+      addMsg('error', 'Microphone permission denied. Go to Settings → Safari → Microphone and allow this site.');
+      setMicIdle();
+    });
+}
 
-  recognition.onstart = () => {
+function startRecording(stream) {
+  micStream = stream;
+  const mimeType = ['audio/mp4', 'audio/webm']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+  mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  recordedChunks = [];
+
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+  mediaRecorder.onstart = () => {
     isListening = true;
     micBtn.className = 'icon-btn listening';
     micBtn.textContent = '⏹';
-    listeningBubble = addMsg('thinking', '🎤 Listening…');
+    listeningBubble = addMsg('thinking', '🎤 Listening… tap to stop');
+  };
+  mediaRecorder.onstop = () => {
+    micStream?.getTracks().forEach(t => t.stop());
+    micStream = null;
+    isListening = false;
+    transcribeAndSubmit(new Blob(recordedChunks, { type: mediaRecorder.mimeType || mimeType }));
   };
 
-  recognition.onresult = e => {
-    const results = Array.from(e.results);
-    // Show interim transcript live in the bubble
-    const interim = results.map(r => r[0].transcript).join('');
-    if (listeningBubble) listeningBubble.textContent = `🎤 ${interim}`;
+  mediaRecorder.start();
+}
 
-    // When a final result arrives, submit it
-    const final = results.find(r => r.isFinal);
-    if (final) {
-      const t = final[0].transcript.trim();
-      if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
-      if (!t) return;
-      // Capture detected language for TTS matching
-      if (final[0].lang) detectedLang = final[0].lang;
-      stopSpeaking();
-      addMsg('user', t);
+async function transcribeAndSubmit(blob) {
+  if (listeningBubble) listeningBubble.textContent = '🎤 Transcribing…';
+  else listeningBubble = addMsg('thinking', '🎤 Transcribing…');
 
-      // Run same navigation detection as submitQuestion()
-      if (isNavQuestion(t) && currentExhibit) {
-        const fromId = exhibitNameToId(currentExhibit);
-        const toId   = parseNavDestination(t);
-        if (fromId && toId && fromId !== toId) {
-          callNavigation(fromId, toId, t);
-          return;
-        }
-        if (fromId && !toId) {
-          const msg = 'Which sculpture would you like directions to? '
-                    + 'I can guide you to the Winged Victory, Venus de Milo, '
-                    + 'Cupid and Psyche, the Borghese Gladiator, the Dying Slave, '
-                    + 'the Seated Scribe, the Bastet Cat Statue, or La Siesta.';
-          addMsg('ai', msg);
-          speak(msg);
-          return;
-        }
+  try {
+    const form = new FormData();
+    form.append('file', blob, blob.type.includes('mp4') ? 'audio.mp4' : 'audio.webm');
+    const res = await fetch(`${BASE_URL}/transcribe`, { method: 'POST', body: form });
+    const data = await res.json().catch(() => ({}));
+    const t = (data.text || '').trim();
+
+    if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
+    setMicIdle();
+    if (!t) { addMsg('error', "Couldn't catch that — please try again."); return; }
+
+    stopSpeaking();
+    addMsg('user', t);
+
+    // Run same navigation detection as submitQuestion()
+    if (isNavQuestion(t) && currentExhibit) {
+      const fromId = exhibitNameToId(currentExhibit);
+      const toId   = parseNavDestination(t);
+      if (fromId && toId && fromId !== toId) {
+        callNavigation(fromId, toId, t);
+        return;
       }
-      callAPI(t, false);
+      if (fromId && !toId) {
+        const msg = 'Which sculpture would you like directions to? '
+                  + 'I can guide you to the Winged Victory, Venus de Milo, '
+                  + 'Cupid and Psyche, the Borghese Gladiator, the Dying Slave, '
+                  + 'the Seated Scribe, the Bastet Cat Statue, or La Siesta.';
+        addMsg('ai', msg);
+        speak(msg);
+        return;
+      }
     }
-  };
-
-  recognition.onnomatch = () => {
-    if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
-    addMsg('error', "Couldn't catch that — please try again.");
-    setMicIdle();
-  };
-
-  recognition.onerror = e => {
-    if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
-    const msg = {
-      'not-allowed':   'Microphone permission denied. Go to Settings → Safari → Microphone and allow this site.',
-      'audio-capture': 'Microphone temporarily unavailable — please try again.',
-      'network':       'Network error — speech recognition needs an internet connection.',
-      'no-speech':     null,
-    }[e.error] ?? `Speech error: ${e.error}`;
-    if (msg) addMsg('error', msg);
-    setMicIdle();
-  };
-
-  recognition.onend = () => {
+    callAPI(t, false);
+  } catch (err) {
     if (listeningBubble) { listeningBubble.remove(); listeningBubble = null; }
     setMicIdle();
-  };
-
-  recognition.start();
+    addMsg('error', 'Network error — voice input needs an internet connection.');
+  }
 }
 
 function setMicIdle() {
