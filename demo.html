@@ -429,7 +429,12 @@ function toggleMic() {
   }
   if (isListening) { mediaRecorder?.stop(); return; }
 
-  navigator.mediaDevices.getUserMedia({ audio: true })
+  // Explicit constraints (not just `audio: true`) — echo/noise pickup on a
+  // phone mic degrades Whisper's transcription and language-detection
+  // accuracy noticeably, especially on short clips.
+  navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  })
     .then(startRecording)
     .catch(() => {
       addMsg('error', 'Microphone permission denied. Go to Settings → Safari → Microphone and allow this site.');

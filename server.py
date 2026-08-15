@@ -305,11 +305,32 @@ def ask(req: AskRequest, request: Request):
     )
 
 
+# Fed to Whisper as a transcription prompt: proper nouns from the knowledge
+# base plus a short phrase per officially-supported language (see README's
+# "Officially supported languages" note). Whisper has no reliable language
+# auto-detection on short, noisy, or accented clips — a few seconds of "tell
+# me about X" is exactly the case where it can lock onto the wrong language
+# entirely (observed in production: German audio transcribed as Danish
+# gibberish). A domain prompt biases both vocabulary and the implicit
+# language signal toward what a visitor here actually says, without forcing
+# a single `language` param that would break the other three languages.
+_TRANSCRIBE_PROMPT = (
+    "Louvre museum sculpture guide. Sophie. Winged Victory of Samothrace, Venus de Milo, "
+    "Cupid and Psyche, Borghese Gladiator, Dying Slave, Seated Scribe, Bastet Cat Statue, "
+    "La Siesta, Air, La Nuit, L'Hommage à Cézanne, Miles Franklin. "
+    "Tell me about... Erzähl mir etwas über... Parlez-moi de... 告訴我關於..."
+)
+
+# Whisper's verbose_json `language` field is the full English name, lowercase
+# (e.g. "german"), not an ISO code — matches what's actually been observed.
+_SUPPORTED_WHISPER_LANGS = {"english", "french", "german", "chinese"}
+
+
 @app.post("/transcribe", response_model=TranscribeResponse)
 @limiter.limit("30/hour")
 async def transcribe(request: Request, file: UploadFile = File(...)):
     """
-    Speech-to-text for multiplayer VR voice questions.
+    Speech-to-text for multiplayer VR voice questions and demo.html's mic input.
 
     The front end records audio via MediaRecorder (webm or mp4) and posts it here
     as multipart/form-data. The audio is sent straight to OpenAI Whisper.
@@ -324,7 +345,18 @@ async def transcribe(request: Request, file: UploadFile = File(...)):
         result = _get_openai_client().audio.transcriptions.create(
             model="whisper-1",
             file=(file.filename or "audio.webm", content),
+            prompt=_TRANSCRIBE_PROMPT,
+            response_format="verbose_json",
         )
+        detected_lang = (getattr(result, "language", "") or "").lower()
+        if detected_lang and detected_lang not in _SUPPORTED_WHISPER_LANGS:
+            # Not necessarily wrong — Whisper's language field is a best-effort
+            # guess too — but it's the strongest signal we have that this
+            # transcript may be garbled, since every visitor-facing feature
+            # only supports these four languages. Logged (and, if SENTRY_DSN
+            # is set, reported) purely for visibility into how often this
+            # happens in practice; the transcript is still returned as-is.
+            logger.warning("transcribe_unexpected_language", extra={"detected_lang": detected_lang})
         return TranscribeResponse(text=(result.text or "").strip())
     except Exception:  # noqa: BLE001 — degrade to empty text instead of 500
         logger.exception("transcribe_failed")
