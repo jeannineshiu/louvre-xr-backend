@@ -485,15 +485,15 @@ A single-page voice chat UI served directly by this backend at `GET /demo` — a
 | Feature | Description |
 |---|---|
 | Sculpture scan | Camera capture → GPT-4o Vision identifies the sculpture and gives a one-line intro |
-| Voice input / output | Native browser Web Speech API — `SpeechRecognition` for input, `speechSynthesis` for reading answers aloud. Entirely client-side; no server call for either direction. |
+| Voice input / output | `POST /transcribe` (OpenAI Whisper) for input, `POST /ask`'s `audio_url` (OpenAI `gpt-4o-mini-tts`) for output — both server-side and genuinely multilingual. Browser `speechSynthesis` is kept only as a fallback if `audio_url` is missing or playback errors out. |
 | Multi-turn conversation | Full history maintained per sculpture session; follow-ups resolve correctly |
 | Shop info | Purchase-related questions surface real [Louvre boutique](https://boutique.louvre.fr) products |
 | Navigation | Ask "How do I get to the Venus de Milo?" — resolved client-side and answered via `GET /navigate`, or via the `NAVIGATION` RAG mode when the destination can't be parsed |
-| Multilingual | Voice recognition auto-detects the spoken language; the detected language is then matched to a browser voice for playback |
+| Multilingual | Whisper detects the spoken language directly from the audio (no browser-language guessing); the AI answer and its TTS audio both come back in that language |
 
-**Browser support:** Safari and Chrome (iPhone/Android/Desktop) all support camera and browser TTS; voice *input* requires Safari on iPhone (Chrome on iOS doesn't expose the Web Speech API) or Chrome/Edge elsewhere, and HTTPS (localhost is exempt).
+**Browser support:** Safari and Chrome (iPhone/Android/Desktop) all support camera and playback of the server's TTS audio; voice *input* needs `MediaRecorder` + microphone access (all evergreen mobile/desktop browsers) and HTTPS (localhost is exempt).
 
-**Multilingual notes:** navigation/shop keyword detection covers English, French, German, Chinese, and Japanese (navigation also covers Spanish); anything outside those keyword sets still reaches the AI, which detects the question's language independently. Navigation directions from the static lookup table are always in English regardless of the visitor's language; UI chrome (badges, error prompts) also stays in English. Voice output quality depends on the voices installed on the visitor's device — the demo doesn't call the server's OpenAI TTS.
+**Officially supported languages: English, French, German, Chinese (Mandarin).** These are the only languages calibrated end-to-end — `rag_engine._PERSONA_GUIDE` names them explicitly, `qa_pipeline._CHITCHAT_REPLIES` has canned greetings/thanks/bye in all four, `eval/golden_set.jsonl` has cross-lingual regression cases for each, and `demo.html`'s `NAV_KEYWORDS`/`SHOP_KEYWORDS` cover all four. Whisper (STT) and `gpt-4o-mini-tts` (TTS) both support many more languages than this at the model level, and the RAG persona will attempt to answer in whatever language it detects — but only these four have a calibrated retrieval threshold (`eval/calibrate_threshold.py`) and dedicated eval coverage, so anything else is best-effort, not guaranteed. Navigation directions from the static lookup table are always in English regardless of the visitor's language; UI chrome (badges, error prompts) also stays in English.
 
 ### CORS
 

@@ -770,10 +770,6 @@ const NAV_KEYWORDS = [
   // Chinese (Mandarin)
   '怎麼走', '怎么走', '如何前往', '在哪裡', '在哪里',
   '怎麼去', '怎么去', '帶我去', '带我去', '路線', '路线',
-  // Japanese
-  'どうやって行く', 'どこですか', 'への道', 'に行きたい',
-  // Spanish
-  'cómo llego', 'dónde está', 'cómo ir', 'llévame a', 'camino a',
 ];
 function isNavQuestion(q) {
   const lower = q.toLowerCase();
@@ -781,12 +777,24 @@ function isNavQuestion(q) {
 }
 
 // ── Shop detection ────────────────────────────────────────────────────────────
+// Supported languages match NAV_KEYWORDS and the chitchat/persona set:
+// English, French, German, Chinese.
 const SHOP_KEYWORDS = [
-  'buy', 'purchase', 'order', 'shop', 'store', 'boutique',
+  // English
+  'buy', 'purchase', 'order', 'shop', 'store',
   'souvenir', 'gift', 'replica', 'reproduction', 'copy', 'figurine',
   'price', 'cost', 'how much', 'euro', '€', 'cheap', 'expensive',
   'poster', 'print', 'magnet', 'pin', 'merchandise', 'product',
   'take home', 'bring home', 'for sale', 'available',
+  // French
+  'acheter', 'boutique', 'magasin', 'cadeau', 'souvenir',
+  'prix', 'combien', 'coûte', 'reproduction',
+  // German
+  'kaufen', 'geschäft', 'laden', 'geschenk', 'andenken',
+  'preis', 'wie viel kostet', 'kosten',
+  // Chinese (Mandarin)
+  '購買', '购买', '商店', '禮品', '礼品', '紀念品', '纪念品',
+  '複製品', '复制品', '價格', '价格', '多少錢', '多少钱',
 ];
 function isShopQuestion(q) {
   const lower = q.toLowerCase();

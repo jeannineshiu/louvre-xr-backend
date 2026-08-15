@@ -112,37 +112,47 @@ _PUNCT_TAIL = r"[\s!?~。！，,.]*$"
 # "hi" and "thanks" don't take the same response.
 _CHITCHAT_CATEGORIES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"^(?:hi|hello|hey|hiya|yo|howdy|good\s?(?:morning|afternoon|evening|day)|"
-                r"bonjour|salut|你好|哈囉|嗨)" + _PUNCT_TAIL, re.IGNORECASE), "greeting"),
+                r"bonjour|salut|hallo|guten\s?(?:tag|morgen|abend)|servus|moin|"
+                r"你好|哈囉|嗨)" + _PUNCT_TAIL, re.IGNORECASE), "greeting"),
     (re.compile(r"^(?:thanks?(?:\s?you)?(?:\s?(?:very|so)\s?much)?|ty|cheers|"
-                r"merci(?:\s?beaucoup)?|謝謝|謝謝你|感謝)" + _PUNCT_TAIL, re.IGNORECASE), "thanks"),
-    (re.compile(r"^(?:bye|goodbye|see\s?you(?:\s?later)?|au\s?revoir|再見|掰掰)" + _PUNCT_TAIL,
-                re.IGNORECASE), "bye"),
-    (re.compile(r"^(?:ok(?:ay)?|cool|great|nice|awesome|got\s?it|sounds\s?good|lol|haha)" + _PUNCT_TAIL,
-                re.IGNORECASE), "ack"),
+                r"merci(?:\s?beaucoup)?|danke(?:\s?sch[oö]n)?|vielen\s?dank|"
+                r"謝謝|謝謝你|感謝)" + _PUNCT_TAIL, re.IGNORECASE), "thanks"),
+    (re.compile(r"^(?:bye|goodbye|see\s?you(?:\s?later)?|au\s?revoir|"
+                r"auf\s?wiedersehen|tsch[uü]ss|tschau|"
+                r"再見|掰掰)" + _PUNCT_TAIL, re.IGNORECASE), "bye"),
+    (re.compile(r"^(?:ok(?:ay)?|cool|great|nice|awesome|got\s?it|sounds\s?good|lol|haha|"
+                r"super|klasse|gut)" + _PUNCT_TAIL, re.IGNORECASE), "ack"),
 ]
 
 _CHINESE_CHAR_PATTERN = re.compile(r"[一-鿿]")
 _FRENCH_WORD_PATTERN = re.compile(r"\b(?:bonjour|salut|merci|au\s?revoir)\b", re.IGNORECASE)
+_GERMAN_WORD_PATTERN = re.compile(
+    r"\b(?:hallo|guten\s?(?:tag|morgen|abend)|servus|moin|danke(?:\s?sch[oö]n)?|"
+    r"vielen\s?dank|auf\s?wiedersehen|tsch[uü]ss|tschau)\b", re.IGNORECASE)
 
 _CHITCHAT_REPLIES: dict[str, dict[str, str]] = {
     "greeting": {
         "en": "Hello! I'm Sophie — ask me about any of the sculptures here.",
         "fr": "Bonjour ! Je suis Sophie, n'hésitez pas à me poser des questions sur les sculptures ici.",
+        "de": "Hallo! Ich bin Sophie — fragen Sie mich gerne alles zu den Skulpturen hier.",
         "zh": "你好！我是蘇菲，歡迎問我這裡的雕塑作品。",
     },
     "thanks": {
         "en": "You're welcome! Let me know if you'd like to hear about any of the sculptures here.",
         "fr": "Avec plaisir ! N'hésitez pas à me demander si vous voulez en savoir plus sur les sculptures.",
+        "de": "Gern geschehen! Fragen Sie mich einfach, wenn Sie mehr über die Skulpturen hier erfahren möchten.",
         "zh": "不客氣！如果想了解這裡的雕塑作品，隨時可以問我。",
     },
     "bye": {
         "en": "Goodbye! Enjoy the rest of your visit.",
         "fr": "Au revoir ! Profitez bien de votre visite.",
+        "de": "Auf Wiedersehen! Genießen Sie den Rest Ihres Besuchs.",
         "zh": "再見！祝你參觀愉快。",
     },
     "ack": {
         "en": "Great! Let me know if you have any other questions.",
         "fr": "Parfait ! N'hésitez pas si vous avez d'autres questions.",
+        "de": "Sehr gut! Melden Sie sich, falls Sie noch weitere Fragen haben.",
         "zh": "太好了！如果還有其他問題歡迎再問我。",
     },
 }
@@ -150,10 +160,11 @@ _CHITCHAT_REPLIES: dict[str, dict[str, str]] = {
 
 def _chitchat_reply(question: str) -> str | None:
     """A canned reply if `question` is pure small-talk, else None. Crude
-    language pick (Chinese char / French keyword presence) — good enough for
-    a one-line pleasantry; anything more contentful falls through to RAG,
-    which already handles language matching properly (see rag_engine
-    _PERSONA_GUIDE)."""
+    language pick (Chinese char / French / German keyword presence) — good
+    enough for a one-line pleasantry; anything more contentful falls through
+    to RAG, which already handles language matching properly (see rag_engine
+    _PERSONA_GUIDE). Supported languages: en, fr, de, zh — keep this list in
+    sync with _PERSONA_GUIDE and demo.html's NAV_KEYWORDS/SHOP_KEYWORDS."""
     stripped = question.strip()
     if not stripped:
         return None
@@ -166,6 +177,8 @@ def _chitchat_reply(question: str) -> str | None:
         lang = "zh"
     elif _FRENCH_WORD_PATTERN.search(stripped):
         lang = "fr"
+    elif _GERMAN_WORD_PATTERN.search(stripped):
+        lang = "de"
     else:
         lang = "en"
     return _CHITCHAT_REPLIES[category][lang]

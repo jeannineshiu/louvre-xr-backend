@@ -127,8 +127,8 @@ FAR_OFF_TOPIC_QUERIES = [
 # Extra cross-lingual on-topic probes, on top of the golden-set cases already
 # tagged with a non-"en" "lang" field (those are loaded automatically by
 # _load_on_topic_queries and land in the same group — don't duplicate them
-# here). The persona explicitly answers in the visitor's language (French and
-# Chinese are called out in _PERSONA_GUIDE), but the chunks are English and
+# here). The persona explicitly answers in the visitor's language (French,
+# German, and Chinese are called out in _PERSONA_GUIDE), but the chunks are English and
 # text-embedding-3-small's cross-lingual alignment is weaker than its
 # monolingual one — so these queries sit systematically further from the index
 # than their English twins, and a threshold calibrated on English-only probes
@@ -140,6 +140,8 @@ EXTRA_MULTILINGUAL_QUERIES = [
     ("zh_dying_slave_tomb",     "垂死的奴隸這座雕像最初是為了什麼而做的？"),
     ("fr_venus_creator",        "Qui a créé la Vénus de Milo et quand ?"),
     ("fr_winged_victory_full",  "Raconte-moi l'histoire de la Victoire de Samothrace."),
+    ("de_venus_creator",        "Wer hat die Venus von Milo erschaffen und wann?"),
+    ("de_bastet_symbolism",     "Wofür stand die Göttin Bastet?"),
 ]
 
 
@@ -243,7 +245,7 @@ def main():
     single_turn, multi_turn, multilingual = _load_on_topic_queries()
     single_scores = _probe_group(vectorstore, "On-topic / single-turn", single_turn)
     multi_scores = _probe_group(vectorstore, "On-topic / multi-turn (history folded in)", multi_turn)
-    multilingual_scores = _probe_group(vectorstore, "On-topic / multilingual (zh/fr)", multilingual)
+    multilingual_scores = _probe_group(vectorstore, "On-topic / multilingual (zh/fr/de)", multilingual)
     near_scores = _probe_group(vectorstore, "Off-topic / near-miss",
                                [(q, q) for q in NEAR_MISS_QUERIES])
     far_scores = _probe_group(vectorstore, "Off-topic / far",
