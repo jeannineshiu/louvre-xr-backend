@@ -100,13 +100,15 @@ def _navigation_answer(question: str, known_from_name: str | None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Chit-chat short-circuit — greetings/thanks/small-talk skip retrieval and
-# the GPT-4o call entirely. Only fires when the ENTIRE (stripped) question
-# matches, so a real question that happens to start with "hi" (e.g. "hi,
-# what is this statue made of?") still goes through RAG normally.
+# Chit-chat short-circuit — greetings/thanks/small-talk, and questions about
+# the assistant's own language range ("how many languages do you speak?"),
+# skip retrieval and the GPT-4o call entirely. Only fires when the ENTIRE
+# (stripped) question matches, so a real question that happens to start with
+# "hi" (e.g. "hi, what is this statue made of?") still goes through RAG
+# normally.
 # ---------------------------------------------------------------------------
 
-_PUNCT_TAIL = r"[\s!?~。！，,.]*$"
+_PUNCT_TAIL = r"[\s!?~。！？，,.]*$"
 
 # Checked in order; first match wins. Each category gets its own reply since
 # "hi" and "thanks" don't take the same response.
@@ -122,13 +124,38 @@ _CHITCHAT_CATEGORIES: list[tuple[re.Pattern, str]] = [
                 r"再見|掰掰)" + _PUNCT_TAIL, re.IGNORECASE), "bye"),
     (re.compile(r"^(?:ok(?:ay)?|cool|great|nice|awesome|got\s?it|sounds\s?good|lol|haha|"
                 r"super|klasse|gut)" + _PUNCT_TAIL, re.IGNORECASE), "ack"),
+    # Visitors testing/probing the assistant's own language range — not an
+    # exhibit question, so it would otherwise hit _PERSONA_GUIDE's grounding
+    # rule and get declined as off-topic. Answered from this fixed list
+    # rather than the LLM, so it can never drift from what's actually
+    # supported (see the officially-supported-languages note in README.md).
+    (re.compile(r"^(?:how many languages (?:do|can) you speak|"
+                r"what languages (?:do|can) you speak|"
+                r"which languages (?:do|can) you speak|"
+                r"do you speak (?:english|french|german|chinese|mandarin)|"
+                r"combien de langues (?:parles-tu|parlez-vous)|"
+                r"quelles langues (?:parles-tu|parlez-vous)|"
+                r"parle[sz]-(?:tu|vous) (?:français|anglais|allemand|chinois)|"
+                r"wie viele sprachen (?:sprichst du|sprechen sie)|"
+                r"welche sprachen (?:sprichst du|sprechen sie)|"
+                r"sprichst du (?:deutsch|englisch|französisch|chinesisch)|"
+                r"sprechen sie (?:deutsch|englisch|französisch|chinesisch)|"
+                r"你(?:會|会)說幾種語言|你(?:會|会)说几种语言|"
+                r"你(?:會|会)說什麼語言|你(?:會|会)说什么语言|"
+                r"你(?:會|会)說哪些語言|你(?:會|会)说哪些语言|"
+                r"你(?:會|会)說中文嗎|你(?:會|会)说中文吗|"
+                r"你(?:會|会)說英文嗎|你(?:會|会)说英文吗|"
+                r"你(?:會|会)說法文嗎|你(?:會|会)说法文吗|"
+                r"你(?:會|会)說德文嗎|你(?:會|会)说德文吗)" + _PUNCT_TAIL, re.IGNORECASE), "languages"),
 ]
 
 _CHINESE_CHAR_PATTERN = re.compile(r"[一-鿿]")
-_FRENCH_WORD_PATTERN = re.compile(r"\b(?:bonjour|salut|merci|au\s?revoir)\b", re.IGNORECASE)
+_FRENCH_WORD_PATTERN = re.compile(
+    r"\b(?:bonjour|salut|merci|au\s?revoir|parle[sz]?|langues?)\b", re.IGNORECASE)
 _GERMAN_WORD_PATTERN = re.compile(
     r"\b(?:hallo|guten\s?(?:tag|morgen|abend)|servus|moin|danke(?:\s?sch[oö]n)?|"
-    r"vielen\s?dank|auf\s?wiedersehen|tsch[uü]ss|tschau)\b", re.IGNORECASE)
+    r"vielen\s?dank|auf\s?wiedersehen|tsch[uü]ss|tschau|sprich\w*|sprech\w*|sprachen)\b",
+    re.IGNORECASE)
 
 _CHITCHAT_REPLIES: dict[str, dict[str, str]] = {
     "greeting": {
@@ -154,6 +181,12 @@ _CHITCHAT_REPLIES: dict[str, dict[str, str]] = {
         "fr": "Parfait ! N'hésitez pas si vous avez d'autres questions.",
         "de": "Sehr gut! Melden Sie sich, falls Sie noch weitere Fragen haben.",
         "zh": "太好了！如果還有其他問題歡迎再問我。",
+    },
+    "languages": {
+        "en": "I speak English, French, German, and Chinese (Mandarin) — feel free to ask me in whichever you're most comfortable with.",
+        "fr": "Je parle anglais, français, allemand et chinois (mandarin) — n'hésitez pas à me poser vos questions dans la langue de votre choix.",
+        "de": "Ich spreche Englisch, Französisch, Deutsch und Chinesisch (Mandarin) — fragen Sie mich gerne in der Sprache, die Ihnen am liebsten ist.",
+        "zh": "我會說英文、法文、德文和中文（普通話）——歡迎用你最習慣的語言問我問題。",
     },
 }
 
