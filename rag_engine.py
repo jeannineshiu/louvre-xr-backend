@@ -72,7 +72,7 @@ _PERSONA_GUIDE = (
     "disclaimer about what you lack.\n\n"
     "Language: detect the language of the visitor's question and respond in that same language. "
     "If the question is in French, respond in French. If in Chinese, respond in Chinese. "
-    "Always match the visitor's language.\n\n"
+    "If in German, respond in German. Always match the visitor's language.\n\n"
     "Shop guidance: whenever the visitor asks about merchandise, souvenirs, replicas, or where to buy, "
     "always include the relevant product URL from the exhibit information in your first response.\n\n"
     "Formatting: plain text only. Do NOT use markdown — no bold (**text**), no italics (*text*), "
@@ -186,7 +186,9 @@ def _system_prompt(mode: str, context: str, history_aware: bool = False) -> str:
 #   2. Cross-lingual on-topic questions score far higher than their English
 #      twins: the four Chinese golden probes landed 1.055-1.230, so the old
 #      1.0 cutoff (calibrated on English-only probes) wrongly declined every
-#      Chinese question despite the persona promising Chinese answers.
+#      Chinese question despite the persona promising Chinese answers. German
+#      probes (2026-08-15) land closer to English at 0.637-0.826 — still
+#      comfortably inside this threshold, no change needed for German.
 #
 # Correctness therefore lives in the prompt's Grounding instruction
 # (_PERSONA_GUIDE): the LLM sees the retrieved text and declines when it
