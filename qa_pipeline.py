@@ -66,6 +66,11 @@ def _matched_exhibit_ids(text: str) -> list[tuple[str, str]]:
     return sorted(hits.items(), key=lambda pair: len(pair[1]), reverse=True)
 
 
+_FROM_INDICATOR_PATTERN = re.compile(
+    r"(?:^|\bi'?m\s+)(?:standing\s+(?:in\s+front\s+of|at|near|by)|"
+    r"(?:currently\s+)?(?:at|near)|here\s+at)\s+(.+?)(?:[.,!?]|\s+how\s|\s+to\s+|$)")
+
+
 def _navigation_answer(question: str, known_from_name: str | None) -> str:
     """Resolve (from, to) exhibit ids from the question + known position, and
     return the deterministic directions from navigation_routes.ROUTES. Declines
@@ -81,13 +86,28 @@ def _navigation_answer(question: str, known_from_name: str | None) -> str:
         to_id = others[0] if others else None
     else:
         text_low = question.lower()
-        from_match = re.search(r"from\s+(.+?)(?:\s+to\s+|$)", text_low)
+        from_match = (re.search(r"from\s+(.+?)(?:\s+to\s+|$)", text_low)
+                      or _FROM_INDICATOR_PATTERN.search(text_low))
         to_match = re.search(r"\bto\s+(.+?)(?:\s+from\s+|$)", text_low)
         for eid, name in candidates:
             if from_match and name in from_match.group(1):
                 from_id = from_id or eid
             if to_match and name in to_match.group(1):
                 to_id = to_id or eid
+
+        # Neither "from X to Y" nor a "standing at/near X" phrasing covers
+        # every natural way a visitor states their position (e.g. "I'm at
+        # the Venus de Milo, how do I get to the Dying Slave?" has no "from"
+        # or recognized standing-phrase at all). When exactly two distinct
+        # exhibits are named and only one end resolved via the patterns
+        # above, the other named exhibit is unambiguously the missing end —
+        # no guessing involved, since there's nothing else it could be.
+        remaining = [eid for eid in matched_ids if eid not in (from_id, to_id)]
+        if len(remaining) == 1 and len(set(matched_ids)) == 2:
+            if from_id and not to_id:
+                to_id = remaining[0]
+            elif to_id and not from_id:
+                from_id = remaining[0]
 
     if not from_id or not to_id:
         return _NAVIGATION_HELP
