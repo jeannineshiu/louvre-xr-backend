@@ -332,6 +332,7 @@ let isSpeaking     = false;
 let detectedLang   = 'en-US';  // updated by STT; used for TTS language matching
 let recognition    = null;
 let busy           = false;
+let currentAudio   = null;  // server-generated mp3 currently playing, if any
 
 // ── DOM ──────────────────────────────────────────────────────────────────────
 const chatEl    = document.getElementById('chat');
@@ -504,6 +505,39 @@ function setMicIdle() {
 }
 
 // ── Voice output ──────────────────────────────────────────────────────────────
+// Prefer the server-generated mp3 (OpenAI TTS, natively multilingual — see
+// tts.py) over the browser's speechSynthesis. The browser voice only knows
+// the language actually spoken into the mic (detectedLang, set by STT), so
+// a typed French question got read back with whatever English voice the
+// browser defaulted to even though the answer text was correct French.
+// The server audio has no such issue: it renders the answer text in its
+// own language. speechSynthesis is kept only as a fallback for when no
+// audio_url comes back (e.g. TTS synthesis failed) or playback errors out.
+function playServerAudio(url, fallbackText) {
+  stopSpeaking();
+  const audio = new Audio(url);
+  currentAudio = audio;
+
+  audio.onplay = () => {
+    isSpeaking = true;
+    speakPill.className = 'speaking-pill on';
+    micBtn.className = 'icon-btn stop-speak';
+    micBtn.textContent = '⏹';
+  };
+  audio.onended = () => {
+    isSpeaking = false;
+    speakPill.className = 'speaking-pill';
+    setMicIdle();
+    currentAudio = null;
+  };
+  audio.onerror = () => {
+    currentAudio = null;
+    speak(fallbackText); // degrade to browser TTS rather than staying silent
+  };
+
+  audio.play().catch(() => audio.onerror());
+}
+
 function speak(text) {
   if (!text) return;
   stopSpeaking();
@@ -541,6 +575,10 @@ function speak(text) {
 
 function stopSpeaking() {
   speechSynthesis.cancel();
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
   isSpeaking = false;
   speakPill.className = 'speaking-pill';
   setMicIdle();
@@ -762,7 +800,7 @@ async function callAPI(question, isIntro, skipNavDetect = false) {
              : (!skipNavDetect && isNavQuestion(question)) ? 'NAVIGATION'
              : isShopQuestion(question)              ? 'SHOP'
              : 'FULL_VOICE';
-  const body = { question: apiQuestion, mode };
+  const body = { question: apiQuestion, mode, voice: true };
   if (history.length)          body.history      = history;
   if (isIntro && imageB64)     body.image_base64  = imageB64;
 
@@ -785,7 +823,11 @@ async function callAPI(question, isIntro, skipNavDetect = false) {
     const answer = data.answer || '';
     if (answer) {
       addMsg('ai', answer);
-      speak(stripURLsForSpeech(answer));
+      if (data.audio_url) {
+        playServerAudio(data.audio_url, stripURLsForSpeech(answer));
+      } else {
+        speak(stripURLsForSpeech(answer));
+      }
       const storedQ = isIntro ? 'What is this sculpture?' : question;
       history.push({ role: 'user',      content: storedQ });
       history.push({ role: 'assistant', content: answer });
