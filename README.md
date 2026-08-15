@@ -44,7 +44,7 @@ Any environment sensing (camera capture, gaze tracking, crowd/noise estimation) 
 
 This service went through a deliberate hardening pass beyond initial feature delivery — the same rigor expected of any customer-facing backend, applied to the specific failure modes of an LLM/RAG system. The engineering checklist and lessons behind it are written up in [`docs/RAG_SKILLS.md`](docs/RAG_SKILLS.md); the summary:
 
-- **Quality gate on every PR, not just code review.** A golden-set eval harness (`eval/`, 22 cases) runs deterministic checks — retrieval hit, length budget, required/forbidden content — as a required CI check on every PR into `main`; a separate scheduled job runs an LLM-judge pass for deeper groundedness scoring. A prompt or retrieval change that degrades answer quality is caught before merge, not discovered by a visitor.
+- **Quality gate on every PR, not just code review.** A golden-set eval harness (`eval/`, 30 cases) runs deterministic checks — retrieval hit, length budget, required/forbidden content — as a required CI check on every PR into `main`; a separate scheduled job runs an LLM-judge pass for deeper groundedness scoring. A prompt or retrieval change that degrades answer quality is caught before merge, not discovered by a visitor.
 - **40 unit tests, evaluated before a single API dollar is spent.** Router, splat registry, cache, navigation lookup, exact-match retrieval, and chit-chat routing are all covered by pytest, run first in CI so a broken build fails fast and free.
 - **Hardened dependency supply chain.** `requirements.txt` is a fully hash-pinned lockfile (`pip-tools --generate-hashes`), installed with `--require-hashes` in both CI and the Docker build; `pip-audit` and Dependabot scan for known CVEs on every PR.
 - **Deterministic guardrails instead of LLM guesswork.** Navigation, exact-name lookups, and chit-chat are resolved by plain code paths — not left for the LLM to infer — which is cheaper, faster, and immune to hallucination on exactly the questions (room numbers, proper nouns) where a wrong guess is most visible to a visitor.
@@ -248,7 +248,7 @@ curl -X POST <BASE_URL>/ask \
 
 ### `POST /transcribe`
 
-Speech-to-text for voice questions. The frontend records audio with `MediaRecorder` and posts the blob here; the server forwards it to **OpenAI Whisper** (`whisper-1`) and returns the transcript. Used in the multi-user WebXR flow, where the native Web Speech API isn't always available.
+Speech-to-text for voice questions. The frontend records audio with `MediaRecorder` and posts the blob here; the server forwards it to **OpenAI Whisper** (`whisper-1`) and returns the transcript. Used by both the multi-user WebXR flow and `demo.html`'s mic input — Whisper detects the spoken language directly from the audio instead of relying on the browser's `SpeechRecognition`, which has no real language auto-detection.
 
 **Rate limit:** 30 requests/hour per IP. Exceeding it returns HTTP `429`. See [API Usage Limits](#api-usage-limits).
 
@@ -476,7 +476,7 @@ async function askSophie(question) {
 netblocksRoom.on('sophie_audio', ({ url }) => new Audio(url).play());
 ```
 
-Sophie's voice is generated with **OpenAI TTS** (`tts-1`, `nova` by default), configurable via the `SOPHIE_VOICE` environment variable (`alloy` \| `echo` \| `fable` \| `onyx` \| `nova` \| `shimmer`). `audio_url` is a full HTTPS URL fetchable by all room members without a proxy; audio files are stored temporarily on the server (consider S3 or similar for a larger-scale deployment). Native clients (e.g. MuseXR-Android) are not subject to CORS.
+Sophie's voice is generated with **OpenAI TTS** (`gpt-4o-mini-tts`, `nova` by default) — a natively multilingual model, chosen over the older `tts-1`/`tts-1-hd` because those read non-English text with an English accent instead of switching pronunciation. Configurable via the `SOPHIE_VOICE` environment variable (`alloy` \| `echo` \| `fable` \| `onyx` \| `nova` \| `shimmer`). `audio_url` is a full HTTPS URL fetchable by all room members without a proxy; audio files are stored temporarily on the server (consider S3 or similar for a larger-scale deployment). Native clients (e.g. MuseXR-Android) are not subject to CORS.
 
 ### Demo web app (`demo.html`)
 
@@ -574,7 +574,7 @@ The `eval` CI workflow runs `python rag_engine.py --check-fresh` on every PR int
 | API server | FastAPI + Uvicorn |
 | LLM | GPT-4o (QA + Vision) |
 | Speech-to-text | OpenAI Whisper (`whisper-1`) — `POST /transcribe` |
-| Text-to-speech | OpenAI TTS (`tts-1`, Sophie voice) |
+| Text-to-speech | OpenAI TTS (`gpt-4o-mini-tts`, Sophie voice) |
 | Embeddings | OpenAI text-embedding-3-small |
 | Vector search | FAISS (via LangChain) |
 | Image processing | OpenCV |
