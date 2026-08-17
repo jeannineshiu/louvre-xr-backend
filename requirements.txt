@@ -685,9 +685,9 @@ langchain-community==0.4.1 \
     --hash=sha256:2135abb2c7748a35c84613108f7ebf30f8505b18c3c18305ffaecfc7651f6c6a \
     --hash=sha256:f3b211832728ee89f169ddce8579b80a085222ddb4f4ed445a46e977d17b1e85
     # via -r requirements.in
-langchain-core==1.5.3 \
-    --hash=sha256:48b56fa580277209594dd7baf837f5b9a2a3651613f34ff9fb1728b429df015f \
-    --hash=sha256:a56457ac444fef41e9404443c187f0ecea708d36e816ea4ba9573c027f7d1a2d
+langchain-core==1.5.4 \
+    --hash=sha256:aa76104f30b6c7305f292cb2c364e67cb52c321940ae812d7969471dce32a89a \
+    --hash=sha256:f1d45e84c4e4d6158218b7a8072ebe9b6d4b51e10cb728c0469650a648e18f1b
     # via
     #   -r requirements.in
     #   langchain
