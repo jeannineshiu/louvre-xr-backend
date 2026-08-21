@@ -18,8 +18,10 @@ from typing import Literal
 
 import sentry_sdk
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from openai import OpenAI
@@ -130,6 +132,22 @@ class AskRequest(BaseModel):
             raise ValueError("question must not be empty or whitespace")
         return v
 
+    @field_validator("image_base64")
+    @classmethod
+    def image_base64_not_blank(cls, v: str | None) -> str | None:
+        # Omitting the key entirely is a supported, intentional flow (text-only
+        # follow-ups, navigation, chitchat — see qa_pipeline.run). Sending the key
+        # with an empty value is different: it almost always means the client
+        # meant to attach a camera frame and the capture silently produced
+        # nothing. That used to fall through as "no image" and quietly skip
+        # recognition, which is invisible to debug; surface it instead.
+        if v is not None and not v.strip():
+            raise ValueError(
+                "image_base64 was sent but is empty — omit the field entirely to "
+                "ask a text-only question, or send a non-empty base64 JPEG/PNG"
+            )
+        return v
+
 
 class AskResponse(BaseModel):
     mode:      str        # NO_RESPONSE | BRIEF_TEXT | GLANCE_CARD | FULL_VOICE | BRIEF_TEXT_PROMPT
@@ -195,10 +213,35 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 logger.info("rate_limit_backend", extra={"backend": "redis" if _REDIS_URL else "memory"})
 
-# Explicit allow-list — the production WebXR front end plus local dev origins.
-# Using explicit origins (not "*") so credentialed requests keep working.
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    """Flatten FastAPI's default 422 body into a single readable sentence.
+
+    By default `detail` is a list of dicts. Debug consoles that expect a string
+    — the Rokid Craft panel, and demo.html's `err.detail || HTTP ${status}` —
+    render that as "[object Object]" or nothing at all, so a plain missing field
+    looks like an unexplained failure. Emit a human-readable `detail` naming
+    every offending field, and keep the original structured list under `errors`
+    for anything that wants to parse it.
+    """
+    parts = []
+    for err in exc.errors():
+        # Drop the leading "body"/"query" segment — the field path is what the
+        # caller needs, and `loc` can be empty for whole-body errors.
+        loc = ".".join(str(x) for x in err.get("loc", ())[1:]) or "request body"
+        parts.append(f"{loc}: {err.get('msg', 'invalid')}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "; ".join(parts) or "Invalid request", "errors": jsonable_encoder(exc.errors())},
+    )
+
+# Explicit allow-list — the production WebXR front end, the Rokid AI Glasses
+# runtime, plus local dev origins. Using explicit origins (not "*") so the
+# surface stays scoped to front ends we actually ship.
 ALLOWED_ORIGINS = [
     "https://webxr-worldmodels.vercel.app",  # production front end
+    "https://js.rokid.com",                  # Rokid Craft IDE / AIUI simulator
     "http://localhost:3000",                 # local dev (Next.js / Vite default)
     "http://localhost:5173",
     "https://localhost:8081",                # local dev (HTTPS, e.g. WebXR dev server)
@@ -206,12 +249,25 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
+# Starlette matches `allow_origins` by exact string only — a "https://*.rokid.com"
+# entry would never match anything. Subdomain wildcards have to go through
+# `allow_origin_regex`, which is applied with re.fullmatch. This covers
+# js.rokid.com as well as whatever host the on-glasses runtime reports.
+ALLOWED_ORIGIN_REGEX = r"https://([a-z0-9-]+\.)*rokid\.com"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
+    # No cookies or Authorization-bearing sessions are used by any front end;
+    # keeping this False also means a misconfigured origin can never read a
+    # credentialed response.
+    allow_credentials=False,
+    # GET is kept alongside POST because demo.html and the WebXR front end call
+    # GET /navigate, /splats and /audio/{id} cross-origin. OPTIONS is the
+    # preflight itself.
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
