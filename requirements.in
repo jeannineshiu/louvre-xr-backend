@@ -26,7 +26,7 @@ langchain-community==0.4.1
 langchain-core==1.5.4
 
 # Vector store
-faiss-cpu==1.13.2
+faiss-cpu==1.15.0
 
 # Computer vision
 opencv-python==4.13.0.92
