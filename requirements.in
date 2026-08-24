@@ -12,11 +12,11 @@ uvicorn==0.52.3
 pydantic==2.13.4
 python-multipart==0.0.31  # required by FastAPI for multipart/form-data (file uploads)
 slowapi==0.1.10  # per-IP rate limiting, to cap public OpenAI usage
-redis==8.0.1  # optional Redis backend for slowapi/limits, so rate limits are shared
+redis==8.1.0  # optional Redis backend for slowapi/limits, so rate limits are shared
               # across replicas instead of per-instance in-memory (see server.py)
 
 # Observability
-sentry-sdk[fastapi]==2.66.0  # error tracking; no-ops unless SENTRY_DSN is set (see server.py)
+sentry-sdk[fastapi]==2.68.0  # error tracking; no-ops unless SENTRY_DSN is set (see server.py)
 
 # AI / LLM
 openai==2.53.0
