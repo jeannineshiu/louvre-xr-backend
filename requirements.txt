@@ -1949,9 +1949,9 @@ uuid-utils==0.17.0 \
     # via
     #   langchain-core
     #   langsmith
-uvicorn==0.44.0 \
-    --hash=sha256:6c942071b68f07e178264b9152f1f16dfac5da85880c4ce06366a96d70d4f31e \
-    --hash=sha256:ce937c99a2cc70279556967274414c087888e8cec9f9c94644dfca11bd3ced89
+uvicorn==0.52.3 \
+    --hash=sha256:116af2710dbf47c80f463cd20ee4884b6662f4c9f227d797ddc7279d2fcc2c7c \
+    --hash=sha256:18857b9e6579300be55c91c0a1cfd37d9a2cf0cabea33b88275f199eb73b8b58
     # via -r requirements.in
 websockets==15.0.1 \
     --hash=sha256:0701bc3cfcb9164d04a14b149fd74be7347a530ad3bbf15ab2c678a2cd3dd9a2 \
