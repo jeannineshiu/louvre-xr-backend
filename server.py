@@ -26,16 +26,22 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from openai import OpenAI
 from pydantic import BaseModel, field_validator
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
+import openai_compat
 import qa_pipeline
 from cache import TTLCache
 from exhibits_data import EXHIBITS
 from logging_config import configure_logging
 from navigation_routes import EXHIBIT_NAMES, ROUTES
 from rag_engine import RAGEngine
+from rate_limit import (
+    ASK_RATE_LIMIT,
+    SESSION_RATE_LIMIT,
+    TRANSCRIBE_RATE_LIMIT,
+    limiter,
+)
 from splat_registry import list_mapping, resolve_splat
 from tts import generate_sophie_audio
 
@@ -187,31 +193,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ContextAR", version="0.2.0", lifespan=lifespan)
 
-# Per-IP rate limiting — this backend is publicly reachable for demo/testing and
-# every OpenAI call (Vision recognition, RAG chat completion, Whisper, TTS) is
-# billed to a single shared API key, so unbounded public traffic is a cost risk
-# rather than just a load-testing concern. Limits below are per-endpoint since
-# /ask is the most expensive (Vision + embeddings + chat) and /transcribe is the
-# cheapest. Tune via the OpenAI dashboard's own hard spending cap as the backstop.
-#
-# Storage backend: in-memory (the default, one counter dict per process) works
-# fine for a single Railway replica, but silently stops enforcing anything
-# meaningful the moment there's more than one — each replica only sees its own
-# slice of traffic, so N replicas effectively multiplies every limit by N. If
-# REDIS_URL is set, counters live in Redis instead and are shared across every
-# replica; if unset, this falls back to the original in-memory behavior so
-# local dev needs no Redis. in_memory_fallback_enabled=True means a transient
-# Redis outage degrades to per-instance limiting (same as before Redis was
-# added) rather than making every request 500.
-_REDIS_URL = os.environ.get("REDIS_URL")
-limiter = Limiter(
-    key_func=get_remote_address,
-    storage_uri=_REDIS_URL or "memory://",
-    in_memory_fallback_enabled=bool(_REDIS_URL),
-)
+# Rate limiting — the Limiter itself and the reasoning behind the limits live in
+# rate_limit.py, shared with the OpenAI-compatible router so both surfaces count
+# against the same buckets.
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-logger.info("rate_limit_backend", extra={"backend": "redis" if _REDIS_URL else "memory"})
+
+# OpenAI-compatible /v1 layer for third-party chat clients (see openai_compat.py).
+# Off unless PARTNER_API_KEY is set; the routes exist either way so a
+# misconfigured deploy answers 503 with a reason instead of a bare 404.
+openai_compat.set_rag_provider(lambda: _rag)
+openai_compat.register_error_handler(app)
+app.include_router(openai_compat.router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -276,7 +269,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 @app.post("/ask", response_model=AskResponse)
-@limiter.limit("20/hour")
+@limiter.limit(ASK_RATE_LIMIT)
 def ask(req: AskRequest, request: Request):
     """
     QA endpoint. Three usage patterns:
@@ -383,7 +376,7 @@ _SUPPORTED_WHISPER_LANGS = {"english", "french", "german", "chinese"}
 
 
 @app.post("/transcribe", response_model=TranscribeResponse)
-@limiter.limit("30/hour")
+@limiter.limit(TRANSCRIBE_RATE_LIMIT)
 async def transcribe(request: Request, file: UploadFile = File(...)):
     """
     Speech-to-text for multiplayer VR voice questions and demo.html's mic input.
@@ -479,7 +472,7 @@ def _generate_greeting(exhibit: str | None) -> str:
 
 
 @app.post("/session/start", response_model=SessionStartResponse)
-@limiter.limit("30/hour")
+@limiter.limit(SESSION_RATE_LIMIT)
 def session_start(req: SessionStartRequest, request: Request):
     """
     Generate Sophie's welcome greeting when a visitor joins a multiplayer room.

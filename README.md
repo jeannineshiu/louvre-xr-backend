@@ -20,6 +20,7 @@ Core exhibition: **Louvre Museum, Paris** — eight sculptures spanning antiquit
 - [Knowledge Base](#knowledge-base)
 - [Getting Started](#getting-started)
 - [API Reference](#api-reference)
+- [OpenAI-Compatible API](#openai-compatible-api)
 - [Context-Aware Response Length (optional)](#context-aware-response-length-optional)
 - [Sculpture Recognition](#sculpture-recognition)
 - [Splat Identification](#splat-identification)
@@ -90,6 +91,8 @@ AI Server (this repo)
 louvre-ar-backend/
 │
 ├── server.py               # FastAPI app — main entry point
+├── openai_compat.py        # OpenAI-compatible /v1 layer for third-party chat clients
+├── rate_limit.py           # Shared slowapi limiter + partner-key buckets
 ├── qa_pipeline.py          # Orchestrates all modules in order
 ├── context_router.py       # Optional response-length routing from gaze_duration + crowd
 ├── rag_engine.py           # RAG: FAISS vector store + GPT-4o, mode-specific prompts
@@ -365,6 +368,11 @@ Returns the browser demo page (`demo.html`) — see [Multi-User / WebXR Integrat
 | `POST /transcribe` | 30 requests/hour |
 | `POST /session/start` | 30 requests/hour |
 | `GET /tts-debug` | 5 requests/hour |
+| `POST /v1/chat/completions` | 120 requests/hour, per partner key (see [OpenAI-Compatible API](#openai-compatible-api)) |
+
+Each limit can be overridden per deploy with `ASK_RATE_LIMIT`, `TRANSCRIBE_RATE_LIMIT`, `SESSION_RATE_LIMIT`, and `PARTNER_RATE_LIMIT` (slowapi syntax, e.g. `60/hour`); the table shows the defaults.
+
+Requests carrying a valid `PARTNER_API_KEY` are counted per key rather than per IP, so a named integrator testing over mobile data can't drain the visitor budget shared by everyone else behind the same carrier NAT — or be drained by them.
 
 Exceeding a limit returns HTTP `429`; the frontend should treat this as "try again later" rather than a hard error. Limits are enforced via [slowapi](https://github.com/laurentS/slowapi) with a pluggable storage backend, controlled by `REDIS_URL`:
 
@@ -376,6 +384,39 @@ This repo doesn't provision Redis itself — add a Redis instance (e.g. Railway'
 These limits are a backstop, not a substitute for capping spend on the OpenAI key itself — set a hard spending limit on `OPENAI_API_KEY` in the [OpenAI dashboard](https://platform.openai.com/settings/organization/limits).
 
 ---
+
+## OpenAI-Compatible API
+
+Third-party glasses clients — [RokidAIAssistant](https://github.com/zero2005x/RokidAIAssistant) and anything else with a "custom endpoint" box — speak the OpenAI chat protocol and nothing else. They take a **base URL**, append `chat/completions` to it, POST `{model, messages}`, and often call `GET /v1/models` first to populate a model picker.
+
+`/ask` doesn't speak that protocol: it has its own schema and picks the model server-side. Pointing such a client at `https://<host>/ask` makes it request `https://<host>/ask/chat/completions` → **404**, no matter what model name is typed. `/v1` exists to bridge that gap.
+
+**Client setup**
+
+| Field | Value |
+|---|---|
+| Base URL | `https://<host>/v1/` |
+| Model | `louvre-sophie` (any string works — the value is ignored) |
+| API Key | the deploy's `PARTNER_API_KEY` |
+| Protocol | Chat Completions (not Responses) |
+
+```bash
+curl https://<host>/v1/chat/completions \
+  -H "Authorization: Bearer $PARTNER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "louvre-sophie", "messages": [{"role": "user", "content": "Who made the Winged Victory?"}]}'
+```
+
+**What it does and doesn't carry**
+
+- The **last `user` message** becomes the question; earlier `user`/`assistant` turns become conversation history, the same way `/ask` accepts `history`.
+- **Camera frames survive.** A vision content part (`{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}`) is unpacked into the pipeline's image input, so sculpture recognition works here too. Remote `http(s)` image URLs are ignored rather than fetched.
+- **`system` messages are dropped.** Sophie's persona and grounding rules come from the RAG prompt; honouring a caller-supplied system prompt would let any client with the token restyle or jailbreak the guide.
+- **`stream: true` is supported.** The pipeline returns a finished string, so the stream is a protocol formality (role frame → content frame → finish frame → `[DONE]`) rather than token-by-token — but a client that asks for SSE and gets a plain JSON body hangs until timeout, which is far harder to diagnose than a fast stream.
+- **Sampling parameters are accepted and ignored** (`temperature`, `max_tokens`, `top_p`, …). Generation settings are fixed in `rag_engine.py`.
+- **Museum-specific fields aren't exposed** — `mode`, `state` routing, `voice`/`audio_url`, `exhibit`, `splat`. A generic chat client has nowhere to put them; use `/ask` for those.
+
+**Access control.** `/v1/*` is off unless `PARTNER_API_KEY` is set, and returns `503` with the reason when it isn't — an unauthenticated `/v1/chat/completions` on a public host is actively scanned for, and every call spends real money on the shared `OPENAI_API_KEY`. Errors use OpenAI's `{"error": {"message": ...}}` shape, because clients render that string and show nothing useful for anything else.
 
 ## Context-Aware Response Length (optional)
 
@@ -540,6 +581,8 @@ Deployed on Railway via the included `Dockerfile`; redeploys automatically on ev
 | `SENTRY_ENVIRONMENT` | Optional, default `production` |
 | `SENTRY_TRACES_SAMPLE_RATE` | Optional, default `0.1` |
 | `REDIS_URL` | Optional — shares rate-limit counters across replicas (see [API Usage Limits](#api-usage-limits)). Unset = in-memory, per-replica. |
+| `PARTNER_API_KEY` | Optional — enables the [OpenAI-compatible API](#openai-compatible-api) and acts as its bearer token. Unset = `/v1/*` returns 503. |
+| `ASK_RATE_LIMIT` etc. | Optional — override the default rate limits (see [API Usage Limits](#api-usage-limits)). |
 
 Since this backend is publicly reachable, set a hard spending limit on `OPENAI_API_KEY` in the OpenAI dashboard before sharing the URL — the per-IP rate limits in this repo (see [API Usage Limits](#api-usage-limits)) reduce but don't eliminate cost exposure from public traffic.
 
