@@ -573,7 +573,7 @@ EXHIBITS = [
         "period": "Contemporary Australian Public Art, 2003",
         "location": "MacMahon Street, Hurstville, Sydney (near Ritz Hotel)",
         "key_facts": (
-            "Bronze public sculpture, life-size seated figure. "
+            "Life-size standing figure in artificial marble (white cement and marble dust), not bronze. "
             "Created in 2003 by Polish-Australian sculptor Jacek Luszczyk. "
             "Commemorates Miles Franklin (1879–1954), one of Australia's most celebrated authors. "
             "Located on MacMahon Street, Hurstville, near the heritage Ritz Hotel, in the Georges River area of Sydney. "
@@ -582,12 +582,13 @@ EXHIBITS = [
             "and close to her former residence at Grey Street, Carlton, and her office in the Jolley's Building, Forest Road, Hurstville."
         ),
         "visual_description": (
-            "A life-size bronze seated figure of a woman in early twentieth-century dress, "
-            "depicted in a relaxed, contemplative pose as if pausing mid-thought or mid-sentence. "
-            "She is placed on a bench or low plinth, bringing her to the eye level of passers-by "
-            "and inviting an informal, personal encounter rather than the distant grandeur of a pedestal monument. "
-            "Her clothing reflects the fashion of the early 1900s — the period of her most famous work. "
-            "The bronze surface has developed a warm patina from years of outdoor exposure in the Sydney climate. "
+            "A life-size standing figure of a woman in early twentieth-century dress, carved in pale "
+            "white artificial marble rather than cast in bronze. She wears a wide-brimmed hat and a long, "
+            "high-necked skirt and fitted jacket in the fashion of the early 1900s — the period of her most "
+            "famous work — holds a closed parasol at her side, and carries a book or sheaf of papers against "
+            "her chest, as if pausing mid-thought on her way somewhere. "
+            "She stands on a dark raised plinth bearing a commemorative plaque, so she reads as a figure "
+            "passed on the street rather than a monument on a distant pedestal. "
             "The figure faces the street, situated against the backdrop of the heritage Ritz Hotel facade, "
             "connecting the literary past of the area with its present-day urban character."
         ),
@@ -638,8 +639,9 @@ EXHIBITS = [
             "on MacMahon Street, Hurstville, in Sydney's Georges River area. "
             "It commemorates Stella Miles Franklin (1879–1954), author of My Brilliant Career (1901) "
             "and founder of Australia's most prestigious literary prize. "
-            "Depicted as a life-size seated figure in early twentieth-century dress, "
-            "the statue is placed at street level beside the heritage Ritz Hotel, "
+            "Depicted as a life-size standing figure in early twentieth-century dress and a wide-brimmed "
+            "hat, carved in white artificial marble, the statue stands on a plinth at street level beside "
+            "the heritage Ritz Hotel, "
             "near the office and former residence Franklin used during her years in Hurstville. "
             "She wrote All That Swagger here in 1936. "
             "The statue was reinstalled in 2023 after temporary removal for street works."
