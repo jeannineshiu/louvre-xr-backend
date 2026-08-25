@@ -24,13 +24,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from openai import OpenAI
 from pydantic import BaseModel, field_validator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 import openai_compat
 import qa_pipeline
+import transcription
 from cache import TTLCache
 from exhibits_data import EXHIBITS
 from logging_config import configure_logging
@@ -82,17 +82,6 @@ def _resolve_exhibit(value: str | None) -> str | None:
 
 # RAGEngine singleton — loaded once at startup, shared across requests
 _rag: RAGEngine | None = None
-
-# OpenAI client singleton — lazily created, reused across requests (Whisper transcription)
-_openai_client: OpenAI | None = None
-
-
-def _get_openai_client() -> OpenAI:
-    global _openai_client
-    if _openai_client is None:
-        _openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    return _openai_client
-
 
 # ---------------------------------------------------------------------------
 # Request / response schema
@@ -354,27 +343,6 @@ def ask(req: AskRequest, request: Request):
     )
 
 
-# Fed to Whisper as a transcription prompt: proper nouns from the knowledge
-# base plus a short phrase per officially-supported language (see README's
-# "Officially supported languages" note). Whisper has no reliable language
-# auto-detection on short, noisy, or accented clips — a few seconds of "tell
-# me about X" is exactly the case where it can lock onto the wrong language
-# entirely (observed in production: German audio transcribed as Danish
-# gibberish). A domain prompt biases both vocabulary and the implicit
-# language signal toward what a visitor here actually says, without forcing
-# a single `language` param that would break the other three languages.
-_TRANSCRIBE_PROMPT = (
-    "Louvre museum sculpture guide. Sophie. Winged Victory of Samothrace, Venus de Milo, "
-    "Cupid and Psyche, Borghese Gladiator, Dying Slave, Seated Scribe, Bastet Cat Statue, "
-    "La Siesta, Air, La Nuit, L'Hommage à Cézanne, Miles Franklin. "
-    "Tell me about... Erzähl mir etwas über... Parlez-moi de... 告訴我關於..."
-)
-
-# Whisper's verbose_json `language` field is the full English name, lowercase
-# (e.g. "german"), not an ISO code — matches what's actually been observed.
-_SUPPORTED_WHISPER_LANGS = {"english", "french", "german", "chinese"}
-
-
 @app.post("/transcribe", response_model=TranscribeResponse)
 @limiter.limit(TRANSCRIBE_RATE_LIMIT)
 async def transcribe(request: Request, file: UploadFile = File(...)):
@@ -388,25 +356,8 @@ async def transcribe(request: Request, file: UploadFile = File(...)):
     caller can degrade gracefully instead of surfacing an error to the visitor.
     """
     try:
-        content = await file.read()
-        if not content:
-            return TranscribeResponse(text="")
-        result = _get_openai_client().audio.transcriptions.create(
-            model="whisper-1",
-            file=(file.filename or "audio.webm", content),
-            prompt=_TRANSCRIBE_PROMPT,
-            response_format="verbose_json",
-        )
-        detected_lang = (getattr(result, "language", "") or "").lower()
-        if detected_lang and detected_lang not in _SUPPORTED_WHISPER_LANGS:
-            # Not necessarily wrong — Whisper's language field is a best-effort
-            # guess too — but it's the strongest signal we have that this
-            # transcript may be garbled, since every visitor-facing feature
-            # only supports these four languages. Logged (and, if SENTRY_DSN
-            # is set, reported) purely for visibility into how often this
-            # happens in practice; the transcript is still returned as-is.
-            logger.warning("transcribe_unexpected_language", extra={"detected_lang": detected_lang})
-        return TranscribeResponse(text=(result.text or "").strip())
+        text = transcription.transcribe(file.filename or "audio.webm", await file.read())
+        return TranscribeResponse(text=text)
     except Exception:  # noqa: BLE001 — degrade to empty text instead of 500
         logger.exception("transcribe_failed")
         return TranscribeResponse(text="")
