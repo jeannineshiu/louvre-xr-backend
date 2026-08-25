@@ -92,6 +92,7 @@ louvre-ar-backend/
 │
 ├── server.py               # FastAPI app — main entry point
 ├── openai_compat.py        # OpenAI-compatible /v1 layer for third-party chat clients
+├── transcription.py        # shared Whisper speech-to-text (/transcribe and /v1/audio/transcriptions)
 ├── rate_limit.py           # Shared slowapi limiter + partner-key buckets
 ├── qa_pipeline.py          # Orchestrates all modules in order
 ├── context_router.py       # Optional response-length routing from gaze_duration + crowd
@@ -369,6 +370,7 @@ Returns the browser demo page (`demo.html`) — see [Multi-User / WebXR Integrat
 | `POST /session/start` | 30 requests/hour |
 | `GET /tts-debug` | 5 requests/hour |
 | `POST /v1/chat/completions` | 120 requests/hour, per partner key (see [OpenAI-Compatible API](#openai-compatible-api)) |
+| `POST /v1/audio/transcriptions` | 120 requests/hour, per partner key (counted separately from chat) |
 
 Each limit can be overridden per deploy with `ASK_RATE_LIMIT`, `TRANSCRIBE_RATE_LIMIT`, `SESSION_RATE_LIMIT`, and `PARTNER_RATE_LIMIT` (slowapi syntax, e.g. `60/hour`); the table shows the defaults.
 
@@ -387,7 +389,7 @@ These limits are a backstop, not a substitute for capping spend on the OpenAI ke
 
 ## OpenAI-Compatible API
 
-Third-party glasses clients — [RokidAIAssistant](https://github.com/zero2005x/RokidAIAssistant) and anything else with a "custom endpoint" box — speak the OpenAI chat protocol and nothing else. They take a **base URL**, append `chat/completions` to it, POST `{model, messages}`, and often call `GET /v1/models` first to populate a model picker.
+Third-party glasses clients — [RokidAIAssistant](https://github.com/zero2005x/RokidAIAssistant) and anything else with a "custom endpoint" box — speak the OpenAI chat protocol and nothing else. They take a **base URL**, append `chat/completions` to it, POST `{model, messages}`, and often call `GET /v1/models` first to populate a model picker. Clients with voice input expect speech recognition at `POST /v1/audio/transcriptions` on the same base URL.
 
 `/ask` doesn't speak that protocol: it has its own schema and picks the model server-side. Pointing such a client at `https://<host>/ask` makes it request `https://<host>/ask/chat/completions` → **404**, no matter what model name is typed. `/v1` exists to bridge that gap.
 
@@ -399,6 +401,7 @@ Third-party glasses clients — [RokidAIAssistant](https://github.com/zero2005x/
 | Model | `louvre-sophie` (any string works — the value is ignored) |
 | API Key | the deploy's `PARTNER_API_KEY` |
 | Protocol | Chat Completions (not Responses) |
+| Speech recognition | same base URL and API key — the client's ASR/Whisper endpoint is `.../v1/audio/transcriptions` |
 
 ```bash
 curl https://<host>/v1/chat/completions \
@@ -415,6 +418,19 @@ curl https://<host>/v1/chat/completions \
 - **`stream: true` is supported.** The pipeline returns a finished string, so the stream is a protocol formality (role frame → content frame → finish frame → `[DONE]`) rather than token-by-token — but a client that asks for SSE and gets a plain JSON body hangs until timeout, which is far harder to diagnose than a fast stream.
 - **Sampling parameters are accepted and ignored** (`temperature`, `max_tokens`, `top_p`, …). Generation settings are fixed in `rag_engine.py`.
 - **Museum-specific fields aren't exposed** — `mode`, `state` routing, `voice`/`audio_url`, `exhibit`, `splat`. A generic chat client has nowhere to put them; use `/ask` for those.
+
+**Speech-to-text.** `POST /v1/audio/transcriptions` is OpenAI's transcription API, so a client's speech field takes the same base URL and the same `PARTNER_API_KEY` — no second provider and no separate OpenAI key.
+
+```bash
+curl https://<host>/v1/audio/transcriptions \
+  -H "Authorization: Bearer $PARTNER_API_KEY" \
+  -F file=@recording.webm -F model=whisper-1
+```
+
+- `response_format` supports `json` (default), `verbose_json`, and `text`; `model` and `temperature` are accepted and ignored (transcription is always `whisper-1`).
+- `language` is forwarded when the client sets one. Left unset, detection is steered by the domain prompt in `transcription.py` — see the note under [`POST /transcribe`](#post-transcribe) on why that prompt exists.
+- A caller-supplied `prompt` is **dropped**, not forwarded: that prompt is what stops a short, accented clip from being detected as the wrong language, so a client must not be able to replace it.
+- Unlike `/transcribe`, failures here are real error responses rather than `{"text": ""}` — a generic client can't distinguish an empty transcript from a broken backend, and would send the empty string on as the visitor's question.
 
 **Access control.** `/v1/*` is off unless `PARTNER_API_KEY` is set, and returns `503` with the reason when it isn't — an unauthenticated `/v1/chat/completions` on a public host is actively scanned for, and every call spends real money on the shared `OPENAI_API_KEY`. Errors use OpenAI's `{"error": {"message": ...}}` shape, because clients render that string and show nothing useful for anything else.
 

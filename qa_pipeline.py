@@ -293,9 +293,12 @@ def run(
             ):
                 exhibit_name = recognition["name"]
             else:
+                # NB: not "name" — logging.makeRecord raises KeyError for any
+                # `extra` key that collides with a stdlib LogRecord attribute,
+                # which turned every unrecognised frame into a 500.
                 logger.info("exhibit_recognition_no_match", extra={
-                    "confidence": recognition.get("confidence"),
-                    "name":       recognition.get("name"),
+                    "confidence":      recognition.get("confidence"),
+                    "recognized_name": recognition.get("name"),
                 })
 
     # If an image was scanned but not matched to any of the recognised sculptures

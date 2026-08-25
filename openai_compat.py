@@ -14,7 +14,10 @@ drift. It deliberately does NOT expose the museum-specific surface (`mode`,
 `state` routing, `voice`/`audio_url`, `splat`): a generic chat client has
 nowhere to put those. Camera frames are the exception — clients send them as
 OpenAI vision content parts, which map cleanly onto the pipeline's `image_b64`,
-so exhibit recognition still works here.
+so exhibit recognition still works here. Speech is the other exception, for
+the same reason: a client that offers a "custom endpoint" for chat usually
+offers one for speech recognition too, and expects it to be OpenAI's
+`POST /v1/audio/transcriptions`.
 
 Access: gated on PARTNER_API_KEY. Unset means these routes are switched off
 entirely (503) rather than open — an unauthenticated /v1/chat/completions on a
@@ -27,12 +30,13 @@ import logging
 import time
 import uuid
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, File, Form, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
 import qa_pipeline
+import transcription
 from rate_limit import PARTNER_RATE_LIMIT, configured_partner_key, is_partner, limiter
 
 logger = logging.getLogger(__name__)
@@ -367,6 +371,63 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
         )
 
     return completion_body(answer, question, model)
+
+
+# The transcription models OpenAI advertises. The value is ignored — this
+# backend transcribes with whisper-1 (see transcription.py) regardless — but a
+# client that sends `model=gpt-4o-transcribe` should not be rejected for it,
+# any more than /v1/chat/completions rejects an unknown chat model name.
+_AUDIO_MODEL_ID = transcription.MODEL
+
+
+@router.post("/audio/transcriptions")
+@limiter.limit(PARTNER_RATE_LIMIT)
+async def audio_transcriptions(
+    request:         Request,
+    file:            UploadFile     = File(...),
+    model:           str | None     = Form(None),   # noqa: ARG001 - accepted, ignored
+    language:        str | None     = Form(None),
+    response_format: str            = Form("json"),
+    prompt:          str | None     = Form(None),   # noqa: ARG001 - see below
+    temperature:     float | None   = Form(None),   # noqa: ARG001 - accepted, ignored
+):
+    """OpenAI-compatible speech-to-text, so one base URL covers chat and voice.
+
+    `prompt` is accepted and dropped rather than forwarded: transcription.PROMPT
+    is what keeps a short, accented clip from being detected as the wrong
+    language entirely, and letting a client replace it would reintroduce exactly
+    the bug it was added to fix.
+
+    Unlike `/transcribe`, a failure here is an error response, not `{"text": ""}`
+    — a generic client has no way to tell an empty transcript from a broken
+    backend, and would silently send the empty string on as the visitor's
+    question.
+    """
+    require_partner(request)
+
+    content = await file.read()
+    try:
+        text = await run_in_threadpool(
+            transcription.transcribe, file.filename or "audio.webm", content, language)
+    except ValueError as exc:
+        raise CompatError(400, str(exc), "invalid_request_error") from exc
+    except Exception as exc:
+        logger.exception("openai_compat_transcribe_failed")
+        raise CompatError(502, f"Transcription failed: {exc}", "api_error") from exc
+
+    logger.info("openai_compat_transcribed", extra={
+        "audio_bytes":     len(content),
+        "text_len":        len(text),
+        "response_format": response_format,
+    })
+
+    # `text` and `srt`/`vtt` are served as plain text by the real API; the two
+    # JSON shapes differ only in the extra fields verbose_json carries.
+    if response_format == "text":
+        return PlainTextResponse(text + "\n")
+    if response_format == "verbose_json":
+        return {"task": "transcribe", "language": language or "", "duration": 0.0, "text": text}
+    return {"text": text}
 
 
 def enabled() -> bool:

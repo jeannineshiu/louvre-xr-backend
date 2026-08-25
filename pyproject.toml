@@ -19,3 +19,4 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # FastAPI's own idiom is `param: T = File(...)` / `Depends(...)` — not a real mutable-default bug.
 "server.py" = ["B008"]
+"openai_compat.py" = ["B008"]
