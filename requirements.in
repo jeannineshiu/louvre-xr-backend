@@ -22,7 +22,7 @@ sentry-sdk[fastapi]==2.68.0  # error tracking; no-ops unless SENTRY_DSN is set (
 openai==2.53.0
 langchain==1.3.14
 langchain-openai==1.1.14
-langchain-community==0.4.1
+langchain-community==0.4.2
 langchain-core==1.5.4
 
 # Vector store
