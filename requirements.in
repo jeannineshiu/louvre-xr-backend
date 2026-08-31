@@ -29,7 +29,7 @@ langchain-core==1.5.4
 faiss-cpu==1.15.0
 
 # Computer vision
-opencv-python==4.13.0.92
+opencv-python==5.0.0.93
 
 # Utilities
 numpy==2.2.6
